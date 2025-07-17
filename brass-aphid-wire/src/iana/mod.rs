@@ -20,7 +20,7 @@ impl DecodeValue for SignatureScheme {
                 tracing::error!("unrecognized signature scheme {:?}", value);
                 Err(io::Error::new(
                     ErrorKind::InvalidInput,
-                    format!("unrecognized signature value {:?}", value),
+                    format!("unrecognized signature value {value:?}"),
                 ))
             }
         }
@@ -32,12 +32,10 @@ impl DecodeValue for Group {
         let value = buffer.read_u16::<BigEndian>()?;
         match Group::from_value(value) {
             Some(group) => Ok((group, buffer)),
-            None => {
-                Err(io::Error::new(
-                    ErrorKind::InvalidInput,
-                    format!("unrecognized group value {value}"),
-                ))
-            }
+            None => Err(io::Error::new(
+                ErrorKind::InvalidInput,
+                format!("unrecognized group value {value}"),
+            )),
         }
     }
 }
@@ -164,7 +162,7 @@ impl HashAlgorithm {
 }
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.1.4.1
-/// 
+///
 /// Note that RSA-PSS is not defined as a signature algorithm variant. Rather is
 /// part of the new SignatureScheme thing that complicates my parsing
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
@@ -190,7 +188,7 @@ impl Cipher {
     ///
     /// This will be None for TLS 1.3 or other NULL ciphers.
     pub fn key_exchange(&self) -> Option<KeyExchange> {
-        let representation = format!("{:?}", self);
+        let representation = format!("{self:?}");
         if representation.contains("TLS_DHE") || representation.contains("TLS_DH_anon") {
             Some(KeyExchange::DHE)
         } else if representation.contains("TLS_RSA") {
@@ -214,7 +212,7 @@ impl Cipher {
             return None;
         }
 
-        let representation = format!("{:?}", self);
+        let representation = format!("{self:?}");
         let without_prefix = &representation["TLS_".len()..];
         // RSA kx and PSK kx don't have signatures
         if without_prefix.starts_with("RSA_WITH")

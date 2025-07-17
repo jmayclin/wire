@@ -4,7 +4,9 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateTls12ish, CertificateTls13, ChangeCipherSpec, ClientHello, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, ServerHello, ServerKeyExchange
+        Alert, CertVerifyTls13, CertificateTls12ish, CertificateTls13, ChangeCipherSpec,
+        ClientHello, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType,
+        ServerHello, ServerKeyExchange,
     },
 };
 
@@ -100,10 +102,7 @@ fn needs_protocol(
     } else {
         Err(std::io::Error::new(
             ErrorKind::Unsupported,
-            format!(
-                "decoding {:?} requires a protocol to be selected",
-                handshake_type
-            ),
+            format!("decoding {handshake_type:?} requires a protocol to be selected"),
         ))
     }
 }
@@ -117,10 +116,7 @@ fn needs_cipher(
     } else {
         Err(std::io::Error::new(
             ErrorKind::Unsupported,
-            format!(
-                "decoding {:?} requires a cipher to be selected",
-                handshake_type
-            ),
+            format!("decoding {handshake_type:?} requires a cipher to be selected"),
         ))
     }
 }

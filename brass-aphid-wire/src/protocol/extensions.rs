@@ -11,7 +11,7 @@
 use crate::codec::{DecodeValueWithContext, EncodeBytesSink};
 use crate::discriminant::impl_byte_value;
 use crate::iana;
-use crate::protocol::{SigHashOrScheme, SignatureAndHashAlgorithm};
+use crate::protocol::SigHashOrScheme;
 use crate::{
     codec::{DecodeByteSource, DecodeValue, EncodeValue},
     iana::Protocol,
@@ -312,7 +312,7 @@ pub struct ClientHelloExtension {
 impl ClientHelloExtension {
     pub fn raw_extension(&self) -> std::io::Result<Extension> {
         let buffer = self.encode_to_vec()?;
-        Ok(Extension::decode_from_exact(&buffer)?)
+        Extension::decode_from_exact(&buffer)
     }
 }
 
@@ -448,5 +448,3 @@ impl EncodeValue for ClientHelloExtension {
         Ok(())
     }
 }
-
-

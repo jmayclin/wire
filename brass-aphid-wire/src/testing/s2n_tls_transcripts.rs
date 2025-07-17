@@ -1,9 +1,11 @@
 use crate::{
     codec::{DecodeValue, DecodeValueWithContext},
     decryption::transcript::TestPairExtension,
-    iana::{self, HashAlgorithm, Protocol, SignatureAlgorithm, SignatureScheme},
+    iana::{self, HashAlgorithm, Protocol, SignatureAlgorithm},
     protocol::{
-        extensions::{ClientHelloExtensionData, EcPointFormat, EcPointFormatList, ExtendedMasterSecret, ExtensionType},
+        extensions::{
+            ClientHelloExtensionData, EcPointFormat, ExtendedMasterSecret, ExtensionType,
+        },
         server_key_exchange::{ECCurveType, EcCurveValue},
         CertificateTls12ish, ChangeCipherSpec, ClientHello, ContentType, HandshakeMessageHeader,
         HandshakeType, RecordHeader, ServerHello, ServerKeyExchange, SigHashOrScheme,
@@ -241,9 +243,12 @@ fn tls13() -> std::io::Result<()> {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::ServerName);
             if let ClientHelloExtensionData::ServerName(s) = ext.extension_data {
-                let list =  s.server_name_list.list();
+                let list = s.server_name_list.list();
                 assert_eq!(list.len(), 1);
-                assert_eq!(String::from_utf8(list[0].host_name.blob().to_vec()).unwrap(), "localhost".to_string());
+                assert_eq!(
+                    String::from_utf8(list[0].host_name.blob().to_vec()).unwrap(),
+                    "localhost".to_string()
+                );
             } else {
                 panic!("unexpected enum");
             }
@@ -254,7 +259,10 @@ fn tls13() -> std::io::Result<()> {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::EcPointFormats);
             if let ClientHelloExtensionData::EcPointFormat(s) = ext.extension_data {
-                assert_eq!(s.ec_point_format_list.list(), &[EcPointFormat::Uncompressed]);
+                assert_eq!(
+                    s.ec_point_format_list.list(),
+                    &[EcPointFormat::Uncompressed]
+                );
             } else {
                 panic!("unexpected enum");
             }

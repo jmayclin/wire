@@ -37,7 +37,7 @@ pub mod server_key_exchange {
     }
     impl_byte_value!(ECCurveType, u8);
 
-    #[derive(Debug,Clone, PartialEq, Eq )]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum EcCurveValue {
         ExplicitPrime(ExplicitPrimeValue),
         ExplicitChar2(ExplicitChar2Value),
@@ -55,7 +55,7 @@ pub mod server_key_exchange {
         pub point: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug,Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct ExplicitPrimeValue {
         pub prime_p: PrefixedBlob<u8>,
         pub curve: EcCurve,
@@ -64,7 +64,7 @@ pub mod server_key_exchange {
         pub cofactor: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug,Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct ExplicitChar2Value {
         pub m: u16,
         // note, we replace the basis and basis_value types with a single unified
@@ -86,7 +86,7 @@ pub mod server_key_exchange {
     /// This type isn't defined in the RFC, but we bundle them together so that
     /// we can minimize the manual encode/decode implementation that we have to
     /// write.
-    #[derive(Debug,Clone, PartialEq, Eq, )]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct EcBasis {
         basis_type: EcBasisType,
         basis_value: EcBasisValue,
@@ -126,7 +126,7 @@ pub mod server_key_exchange {
 
     /// You need to look at the errata to figure out that value for this
     /// https://mailarchive.ietf.org/arch/msg/tls/azwTmtiFRoWz9uJYd_tVanBDgYI/
-    #[derive(Debug, Clone , PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+    #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
     #[repr(u8)]
     pub enum EcBasisType {
         Trinomial = 1,
@@ -152,7 +152,7 @@ pub mod server_key_exchange {
         pub k3: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug, Clone, PartialEq, Eq, )]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct EcParameters {
         pub curve_type: ECCurveType,
         pub curve_value: EcCurveValue,

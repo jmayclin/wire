@@ -281,7 +281,7 @@ impl Display for Cipher {
 
 impl Debug for Cipher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "{self}")
     }
 }
 
@@ -386,7 +386,7 @@ mod signature_scheme_tests {
     #[test]
     fn csv_parsing() {
         let iana_signature_schemes = SignatureScheme::parse_iana_csv();
-        println!("{:#?}", iana_signature_schemes);
+        println!("{iana_signature_schemes:#?}");
         assert_eq!(iana_signature_schemes.len(), 34);
     }
 
@@ -417,7 +417,7 @@ mod groups {
     #[test]
     fn csv_parsing() {
         let iana_signature_schemes = Group::parse_iana_csv();
-        println!("{:#?}", iana_signature_schemes);
+        println!("{iana_signature_schemes:#?}");
         assert_eq!(iana_signature_schemes.len(), 56);
     }
 

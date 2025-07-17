@@ -13,16 +13,14 @@ use aws_lc_rs::{
 };
 use std::{
     collections::HashMap,
-    ffi::c_int,
     fmt::Debug,
-    io::{ErrorKind, Read, Write},
-    os::raw::c_void,
+    io::{Read, Write},
     pin::Pin,
     sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Mode {
+pub enum Mode {
     Client,
     Server,
 }
@@ -69,7 +67,7 @@ impl iana::Cipher {
 /// The `Pin` is necessary for safe use with s2n-tls, which will case the reference
 /// to a c_void pointer.
 #[derive(Debug, Clone)]
-struct KeyManager(Pin<Arc<Mutex<HashMap<Vec<u8>, TlsKeys>>>>);
+pub struct KeyManager(Pin<Arc<Mutex<HashMap<Vec<u8>, TlsKeys>>>>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 struct TlsKeys {
@@ -315,7 +313,7 @@ impl KeySpace {
     }
 }
 
-struct StreamDecrypter {
+pub struct StreamDecrypter {
     /// The identity of this decrypter, either "client" or "server".
     ///
     /// We need to track this because we need to map send/recv data onto client/server
@@ -326,26 +324,26 @@ struct StreamDecrypter {
     pub identity: Option<Mode>,
     pub client_random: Option<Vec<u8>>,
 
-    pub selected_cipher: Option<iana::Cipher>,
-    pub selected_protocol: Option<Protocol>,
+    selected_cipher: Option<iana::Cipher>,
+    selected_protocol: Option<Protocol>,
 
     /// all tx calls are buffered here until there is enough to read a message
-    pub raw_server_tx: Vec<u8>,
-    pub raw_client_tx: Vec<u8>,
+    raw_server_tx: Vec<u8>,
+    raw_client_tx: Vec<u8>,
 
     /// records, populated from tx
-    pub server_record_tx: Vec<Vec<u8>>,
-    pub client_record_tx: Vec<Vec<u8>>,
+    server_record_tx: Vec<Vec<u8>>,
+    client_record_tx: Vec<Vec<u8>>,
 
     // these are the "real" send and read callbacks that the client wants to use.
     // In the case of s2n-tls, I plan to steal them from inside the bindings.
-    pub intercepted_send: Box<dyn std::io::Write>,
-    pub intercepted_read: Box<dyn std::io::Read>,
+    intercepted_send: Box<dyn std::io::Write>,
+    intercepted_read: Box<dyn std::io::Read>,
 
-    pub key_manager: KeyManager,
+    key_manager: KeyManager,
     // TODO: 2 different key spaces for client and server. They could stack key
     // updates on top of each other and we need to be able to handle that.
-    pub current_space: Option<KeySpace>,
+    current_space: Option<KeySpace>,
 
     pub transcript: Vec<(Mode, ContentValue)>,
 }
@@ -378,7 +376,7 @@ impl StreamDecrypter {
             client_record_tx: Vec::new(),
             intercepted_send: send,
             intercepted_read: read,
-            key_manager: key_manager,
+            key_manager,
             current_space: None,
             transcript: Vec::new(),
         }
@@ -541,9 +539,10 @@ impl StreamDecrypter {
                                 }
                                 (ContentValue::Handshake(handshake_message), inner_buffer)
                             }
-                            ContentType::ApplicationData => {
-                                (ContentValue::ApplicationData(inner_plaintext.to_vec()), [].as_slice())
-                            },
+                            ContentType::ApplicationData => (
+                                ContentValue::ApplicationData(inner_plaintext.to_vec()),
+                                [].as_slice(),
+                            ),
                         };
                         self.transcript.push((mode, value));
 
@@ -762,26 +761,31 @@ mod s2n_tls_decryption {
 
         test_pair.client.poll_send(b"i am the client");
         test_pair.server.poll_recv(&mut message_buffer);
-        
+
         test_pair.server.poll_send(b"i am the server");
         test_pair.client.poll_recv(&mut message_buffer);
 
-        
         test_pair.client.poll_shutdown();
         test_pair.server.poll_shutdown();
         let mut messages = stream_decrypter.transcript;
-        println!("{:?}", messages);
+        println!("{messages:?}");
         // should just use vec deque
         let mut messages = messages.drain(..);
 
         // handshake starts
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Client);
-        assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))));
+        assert!(matches!(
+            message,
+            ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))
+        ));
 
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Server);
-        assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))));
+        assert!(matches!(
+            message,
+            ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
+        ));
 
         // encrypted data
         let (sender, message) = messages.next().unwrap();
@@ -800,15 +804,24 @@ mod s2n_tls_decryption {
 
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Server);
-        assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::CertVerifyTls13(_))));
+        assert!(matches!(
+            message,
+            ContentValue::Handshake(HandshakeMessageValue::CertVerifyTls13(_))
+        ));
 
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Server);
-        assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::Finished(_))));
+        assert!(matches!(
+            message,
+            ContentValue::Handshake(HandshakeMessageValue::Finished(_))
+        ));
 
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Client);
-        assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::Finished(_))));
+        assert!(matches!(
+            message,
+            ContentValue::Handshake(HandshakeMessageValue::Finished(_))
+        ));
 
         // handshake finished -> application data
 

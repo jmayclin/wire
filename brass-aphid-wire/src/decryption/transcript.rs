@@ -35,7 +35,9 @@ impl TestPairTranscript {
         let client_boxed = Box::new(client_record_handle);
 
         pair.client
-            .set_send_callback(Some(s2n_tls_intercept::generic_send_cb::<RecordingSendHandle>))
+            .set_send_callback(Some(
+                s2n_tls_intercept::generic_send_cb::<RecordingSendHandle>,
+            ))
             .unwrap();
         unsafe { pair.client.set_send_context(client_boxed.as_ref() as *const RecordingSendHandle as *mut c_void) }.unwrap();
 
@@ -45,7 +47,9 @@ impl TestPairTranscript {
         let server_boxed = Box::new(server_record_handle);
 
         pair.server
-            .set_send_callback(Some(s2n_tls_intercept::generic_send_cb::<RecordingSendHandle>))
+            .set_send_callback(Some(
+                s2n_tls_intercept::generic_send_cb::<RecordingSendHandle>,
+            ))
             .unwrap();
         unsafe { pair.server.set_send_context(server_boxed.as_ref() as *const RecordingSendHandle as *mut c_void) }.unwrap();
 

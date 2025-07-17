@@ -1,11 +1,11 @@
 pub mod codec;
 pub mod decryption;
 pub mod iana;
+pub mod key_log;
 pub mod prefixed_list;
 pub mod protocol;
 #[cfg(test)]
 pub mod testing;
-pub mod key_log;
 
 mod stream_decrypter;
 

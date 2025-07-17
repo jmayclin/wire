@@ -9,7 +9,7 @@ use crate::{
         DecodeByteSource, DecodeValue, DecodeValueWithContext, EncodeBytesSink, EncodeValue, U24,
     },
     discriminant::impl_byte_value,
-    iana::{self, constants::rsa_pss_rsae_sha256, HashAlgorithm, Protocol, SignatureAlgorithm},
+    iana::{self, HashAlgorithm, Protocol, SignatureAlgorithm},
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
         extensions::{ClientHelloExtension, Extension, ExtensionType, SupportedVersionServerHello},
@@ -82,7 +82,7 @@ impl DecodeValue for ClientHello {
 }
 
 /// ServerHello definition: https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
-#[derive(Debug, Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct ServerHello {
     pub protocol_version: Protocol,
     pub random: [u8; 32],
@@ -157,7 +157,6 @@ impl DecodeValue for SigHashOrScheme {
             let (value, buffer) = buffer.decode_value()?;
             Ok((Self::SignatureScheme(value), buffer))
         }
-
     }
 }
 
@@ -170,7 +169,6 @@ impl EncodeValue for SigHashOrScheme {
         Ok(())
     }
 }
-
 
 ///   struct {
 ///      SignatureAndHashAlgorithm algorithm;
@@ -234,7 +232,7 @@ pub struct CertificateTls13 {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
-#[derive(Debug, Clone, PartialEq, Eq,  strum::EnumIter, EncodeEnum, DecodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum KeyUpdateRequest {
     UpdateNotRequested = 0,
@@ -335,7 +333,7 @@ impl DecodeValueWithContext for ServerKeyExchange {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.4.4
-#[derive(Debug, Clone, PartialEq, Eq, )]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Finished {
     pub verify_data: Vec<u8>,
 }

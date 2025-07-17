@@ -82,7 +82,7 @@ pub trait EncodeValue: Sized {
 
     fn encode_to_vec(&self) -> std::io::Result<Vec<u8>> {
         const AVERAGE_LENGTH_GUESS: usize = 100;
-        
+
         let mut buffer = Vec::with_capacity(AVERAGE_LENGTH_GUESS);
         self.encode_to(&mut buffer)?;
         Ok(buffer)
