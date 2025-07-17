@@ -4,20 +4,19 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateTls12ish, CertificateTls13, ClientHello,
-        EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, ServerHello,
-        ServerKeyExchange,
+        Alert, CertVerifyTls13, CertificateTls12ish, CertificateTls13, ChangeCipherSpec, ClientHello, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, ServerHello, ServerKeyExchange
     },
 };
 
-#[derive(Debug)]
-enum ContentValue {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ContentValue {
     Alert(Alert),
     ApplicationData(Vec<u8>),
     Handshake(HandshakeMessageValue),
+    ChangeCipherSpec(ChangeCipherSpec),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandshakeMessageValue {
     ClientHello(ClientHello),
     ServerHello(ServerHello),

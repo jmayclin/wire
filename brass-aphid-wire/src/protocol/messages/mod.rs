@@ -82,7 +82,7 @@ impl DecodeValue for ClientHello {
 }
 
 /// ServerHello definition: https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
 pub struct ServerHello {
     pub protocol_version: Protocol,
     pub random: [u8; 32],
@@ -177,7 +177,7 @@ impl EncodeValue for SigHashOrScheme {
 ///      opaque signature<0..2^16-1>;
 ///   } DigitallySigned;
 /// https://datatracker.ietf.org/doc/html/rfc5246#section-4.7
-#[derive(Debug, EncodeStruct, DecodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, EncodeStruct, DecodeStruct)]
 pub struct DigitallySignedElement {
     pub algorithm: SigHashOrScheme,
     pub signature: PrefixedBlob<u16>,
@@ -200,7 +200,7 @@ pub struct DigitallySignedElement {
 
 // This struct has two variants, but they're both the same length so parsing
 // like this is fine.
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertificateEntry {
     pub cert_data: PrefixedBlob<U24>,
     pub extensions: PrefixedBlob<u16>,
@@ -208,13 +208,13 @@ pub struct CertificateEntry {
 
 /// Used in TLS 1.0 - TLS 1.2
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.2
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertificateTls12ish {
     pub certificate_list: PrefixedBlob<U24>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.3.1
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct EncryptedExtensions {
     pub extensions: PrefixedBlob<u16>,
 }
@@ -227,14 +227,14 @@ pub struct CertificateRequest {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.4.2
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertificateTls13 {
     pub certificate_request_context: PrefixedBlob<u8>,
     pub certificate_list: PrefixedList<CertificateEntry, U24>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
-#[derive(Debug, strum::EnumIter, EncodeEnum, DecodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq,  strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum KeyUpdateRequest {
     UpdateNotRequested = 0,
@@ -272,7 +272,7 @@ impl_byte_value!(KeyUpdateRequest, u8);
 ///
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5246#section-7.4.3
 /// Extended in https://datatracker.ietf.org/doc/html/rfc4492#section-5.4
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ServerKeyExchange {
     // TODO: I'm ignoring ECDH (static) because its awful and ugly
     Ecdhe {
@@ -335,7 +335,7 @@ impl DecodeValueWithContext for ServerKeyExchange {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.4.4
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, )]
 pub struct Finished {
     pub verify_data: Vec<u8>,
 }
@@ -361,7 +361,7 @@ impl DecodeValueWithContext for Finished {
 ///
 /// The TLS 1.2 Cert Verify looks mostly the same on the wire, but uses a sig/hash
 /// tuple (ECDSA, SHA256) instead of a signature scheme (ecdsa_secp256r1_sha256).
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertVerifyTls13 {
     pub algorithm: iana::SignatureScheme,
     pub signature: PrefixedBlob<u16>,

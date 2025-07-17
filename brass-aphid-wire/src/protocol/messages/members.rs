@@ -22,7 +22,7 @@ pub mod server_key_exchange {
     /// Generally everything should be using `NamedCurve`.
     ///
     /// [RFC reference](https://datatracker.ietf.org/doc/html/rfc4492#section-5.4)
-    #[derive(Debug, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+    #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
     #[repr(u8)]
     pub enum ECCurveType {
         /// Indicates the elliptic curve domain parameters are conveyed verbosely,
@@ -37,25 +37,25 @@ pub mod server_key_exchange {
     }
     impl_byte_value!(ECCurveType, u8);
 
-    #[derive(Debug)]
+    #[derive(Debug,Clone, PartialEq, Eq )]
     pub enum EcCurveValue {
         ExplicitPrime(ExplicitPrimeValue),
         ExplicitChar2(ExplicitChar2Value),
         NamedCurve(iana::Group),
     }
 
-    #[derive(Debug, EncodeStruct, DecodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, EncodeStruct, DecodeStruct)]
     pub struct ServerEcdhParams {
         pub curve_params: EcParameters,
         pub public: EcPoint,
     }
 
-    #[derive(Debug, EncodeStruct, DecodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, EncodeStruct, DecodeStruct)]
     pub struct EcPoint {
         pub point: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug,Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
     pub struct ExplicitPrimeValue {
         pub prime_p: PrefixedBlob<u8>,
         pub curve: EcCurve,
@@ -64,7 +64,7 @@ pub mod server_key_exchange {
         pub cofactor: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug,Clone, PartialEq, Eq,  DecodeStruct, EncodeStruct)]
     pub struct ExplicitChar2Value {
         pub m: u16,
         // note, we replace the basis and basis_value types with a single unified
@@ -77,7 +77,7 @@ pub mod server_key_exchange {
         pub cofactor: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct EcCurve {
         pub a: PrefixedBlob<u8>,
         pub b: PrefixedBlob<u8>,
@@ -86,7 +86,7 @@ pub mod server_key_exchange {
     /// This type isn't defined in the RFC, but we bundle them together so that
     /// we can minimize the manual encode/decode implementation that we have to
     /// write.
-    #[derive(Debug)]
+    #[derive(Debug,Clone, PartialEq, Eq, )]
     pub struct EcBasis {
         basis_type: EcBasisType,
         basis_value: EcBasisValue,
@@ -126,7 +126,7 @@ pub mod server_key_exchange {
 
     /// You need to look at the errata to figure out that value for this
     /// https://mailarchive.ietf.org/arch/msg/tls/azwTmtiFRoWz9uJYd_tVanBDgYI/
-    #[derive(Debug, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+    #[derive(Debug, Clone , PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
     #[repr(u8)]
     pub enum EcBasisType {
         Trinomial = 1,
@@ -134,25 +134,25 @@ pub mod server_key_exchange {
     }
     impl_byte_value!(EcBasisType, u8);
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub enum EcBasisValue {
         Trinomial(TrinomialValue),
         Pentanomial(PentanomialValue),
     }
 
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct TrinomialValue {
         pub k: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct PentanomialValue {
         pub k1: PrefixedBlob<u8>,
         pub k2: PrefixedBlob<u8>,
         pub k3: PrefixedBlob<u8>,
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq, )]
     pub struct EcParameters {
         pub curve_type: ECCurveType,
         pub curve_value: EcCurveValue,
@@ -195,7 +195,7 @@ pub mod server_key_exchange {
         }
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone, PartialEq, Eq)]
     pub struct Signature {
         pub signature: Option<DigitallySignedElement>,
     }
@@ -226,7 +226,7 @@ pub mod server_key_exchange {
     //        opaque dh_g<1..2^16-1>;
     //        opaque dh_Ys<1..2^16-1>;
     //    } ServerDHParams;     /* Ephemeral DH parameters */
-    #[derive(Debug, DecodeStruct, EncodeStruct)]
+    #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
     pub struct ServerDhParams {
         pub dh_p: PrefixedBlob<u16>,
         pub dh_g: PrefixedBlob<u16>,
