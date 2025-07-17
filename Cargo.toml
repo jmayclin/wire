@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "brass-aphid-wire",
+    "brass-aphid-wire-macros",
+    "brass-aphid-wire/fuzz",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
