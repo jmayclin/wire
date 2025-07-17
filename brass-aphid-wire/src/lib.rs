@@ -5,6 +5,7 @@ pub mod prefixed_list;
 pub mod protocol;
 #[cfg(test)]
 pub mod testing;
+pub mod key_log;
 
 mod stream_decrypter;
 
