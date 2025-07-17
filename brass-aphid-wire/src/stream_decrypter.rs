@@ -501,12 +501,15 @@ impl StreamDecrypter {
                         let (content_type, _buffer) =
                             ContentType::decode_from(&plaintext[plaintext.len() - 1..])?;
 
+                        // drop the content byte from the end
+                        let plaintext = &plaintext[..(plaintext.len() - 1)];
+
                         println!("InnerRecordHeader {{");
                         println!("    content_type: {content_type:?}");
-                        println!("    inner_length: {}", plaintext.len() - 1);
+                        println!("    inner_length: {}", plaintext.len());
                         println!("    padding: {padding}");
                         println!("}}");
-                        let inner_plaintext = plaintext.as_slice();
+                        let inner_plaintext = plaintext;
 
                         let (value, buffer) = match content_type {
                             ContentType::Invalid => panic!("invalid"),
@@ -538,7 +541,9 @@ impl StreamDecrypter {
                                 }
                                 (ContentValue::Handshake(handshake_message), inner_buffer)
                             }
-                            ContentType::ApplicationData => todo!(),
+                            ContentType::ApplicationData => {
+                                (ContentValue::ApplicationData(inner_plaintext.to_vec()), [].as_slice())
+                            },
                         };
                         self.transcript.push((mode, value));
 
@@ -752,13 +757,24 @@ mod s2n_tls_decryption {
         }
 
         test_pair.handshake().unwrap();
-        test_pair.client.poll_shutdown_send();
-        test_pair.server.poll_shutdown_send();
+
+        let mut message_buffer = [0; b"i am the client".len()];
+
+        test_pair.client.poll_send(b"i am the client");
+        test_pair.server.poll_recv(&mut message_buffer);
+        
+        test_pair.server.poll_send(b"i am the server");
+        test_pair.client.poll_recv(&mut message_buffer);
+
+        
+        test_pair.client.poll_shutdown();
+        test_pair.server.poll_shutdown();
         let mut messages = stream_decrypter.transcript;
         println!("{:?}", messages);
         // should just use vec deque
         let mut messages = messages.drain(..);
 
+        // handshake starts
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Client);
         assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))));
@@ -767,6 +783,7 @@ mod s2n_tls_decryption {
         assert_eq!(sender, Mode::Server);
         assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))));
 
+        // encrypted data
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Server);
         assert!(matches!(
@@ -793,6 +810,28 @@ mod s2n_tls_decryption {
         assert_eq!(sender, Mode::Client);
         assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::Finished(_))));
 
+        // handshake finished -> application data
+
+        let (sender, message) = messages.next().unwrap();
+        assert_eq!(sender, Mode::Client);
+        if let ContentValue::ApplicationData(data) = message {
+            assert_eq!(&data, b"i am the client");
+        } else {
+            panic!("unexpected message");
+        }
+
+        let (sender, message) = messages.next().unwrap();
+        assert_eq!(sender, Mode::Server);
+        if let ContentValue::ApplicationData(data) = message {
+            assert_eq!(&data, b"i am the server");
+        } else {
+            panic!("unexpected message");
+        }
+
+        // application finished -> alerts
+
+        // these are "backwards" because the server.poll_shutdown() will first read
+        // and then write
         let (sender, message) = messages.next().unwrap();
         assert_eq!(sender, Mode::Server);
         assert!(matches!(message, ContentValue::Alert(_)));
