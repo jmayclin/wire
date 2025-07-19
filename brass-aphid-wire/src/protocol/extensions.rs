@@ -284,6 +284,11 @@ pub struct PresharedKeyClientHello {
     pub binders: PrefixedList<PskBinderEntry, u16>,
 }
 
+/// Defined in https://datatracker.ietf.org/doc/html/rfc7366#section-2
+/// Sent in ClientHello or ServerHello in TLS 1.2(ish?)
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct EncryptThenMac {}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloExtensionData {
     PreSharedKey(PresharedKeyClientHello),
@@ -300,6 +305,7 @@ pub enum ClientHelloExtensionData {
     PskKeyExchangeModes(PskKeyExchangeModes),
     RecordSizeLimit(RecordSizeLimit),
     Padding(Padding),
+    EncryptThenMac(EncryptThenMac),
     Unknown(Vec<u8>),
 }
 
@@ -362,7 +368,10 @@ impl DecodeValue for ClientHelloExtension {
                 }
                 ClientHelloExtensionData::Padding(value)
             }
-            ExtensionType::EncryptThenMac => todo!(),
+            ExtensionType::EncryptThenMac => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::EncryptThenMac(value)
+            },
             ExtensionType::ExtendedMasterSecret => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::ExtendedMasterSecret(value)
@@ -441,6 +450,7 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::PskKeyExchangeModes(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::RecordSizeLimit(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::Padding(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::EncryptThenMac(extension) => extension.encode_to_vec(),
         }?;
         let length = extension_data.len() as u16;
         buffer.encode_value(&length)?;

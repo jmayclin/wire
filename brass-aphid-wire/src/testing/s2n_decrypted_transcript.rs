@@ -2,11 +2,10 @@ use s2n_tls::testing::TestPair;
 
 use crate::{
     decryption::{
-        s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe},
-        DecryptingPipe,
+        key_manager::KeyManager, s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe}, DecryptingPipe
     },
     protocol::content_value::{ContentValue, HandshakeMessageValue},
-    stream_decrypter::{KeyManager, Mode},
+    stream_decrypter::Mode,
     testing::utilities::{s2n_server_config, SigType},
 };
 
@@ -54,7 +53,57 @@ fn s2n_server_test() -> anyhow::Result<()> {
     test_pair.server.poll_shutdown_send();
     test_pair.client.poll_recv(&mut [0]);
 
-    let messages = stream_decrypter.decrypter.transcript;
+    let messages = stream_decrypter.decrypter.lock().unwrap().transcript.clone();
+    assert_s2n_decryption_correct(messages);
+
+    Ok(())
+}
+
+#[test]
+fn s2n_client_test() -> anyhow::Result<()> {
+    let key_manager = KeyManager::new();
+
+    let mut client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
+    let server_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
+    key_manager.enable_s2n_logging(&mut client_config);
+    let mut test_pair = TestPair::from_configs(&client_config.build()?, &server_config.build()?);
+
+    test_pair
+        .client
+        .set_server_name("omg💅heyyy✨bestie💖lets👪do💌tls🔒")
+        .unwrap();
+
+    // let server send_cb
+    let send = intercept_send_callback(&test_pair, s2n_tls::enums::Mode::Client);
+    let recv = intercept_recv_callback(&test_pair, s2n_tls::enums::Mode::Client);
+    let nasty_pipe = ArchaicCPipe::new(send, recv);
+
+    let decrypting_stream = DecryptingPipe::new(key_manager, nasty_pipe);
+
+    let stream_decrypter = Box::new(decrypting_stream);
+    DecryptingPipe::enable_s2n_tls_decryption(&stream_decrypter, &mut test_pair.client);
+
+    test_pair.handshake().unwrap();
+
+    let mut message_buffer = [0; b"i am the client".len()];
+
+    test_pair.client.poll_send(b"i am the client");
+    test_pair.server.poll_recv(&mut message_buffer);
+
+    test_pair.server.poll_send(b"i am the server");
+    test_pair.client.poll_recv(&mut message_buffer);
+
+    // the complicated shutdown dance is required so that the client and server
+    // are always reading the CloseNotify in the same order. While this normally
+    // doesn't matter, we want to reuse these assertions for both client and
+    // server decryption.
+    test_pair.client.poll_shutdown_send();
+    test_pair.server.poll_recv(&mut [0]);
+
+    test_pair.server.poll_shutdown_send();
+    test_pair.client.poll_recv(&mut [0]);
+
+    let messages = stream_decrypter.decrypter.lock().unwrap().transcript.clone();
     assert_s2n_decryption_correct(messages);
 
     Ok(())

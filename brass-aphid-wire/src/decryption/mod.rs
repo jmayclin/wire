@@ -1,12 +1,13 @@
-use std::ffi::c_void;
+use std::{ffi::c_void, sync::{Arc, Mutex}};
 
 use crate::{
-    decryption::s2n_tls_intercept::{generic_recv_cb, generic_send_cb},
-    stream_decrypter::{KeyManager, Mode, StreamDecrypter},
+    decryption::{key_manager::KeyManager, s2n_tls_intercept::{generic_recv_cb, generic_send_cb}},
+    stream_decrypter::{Mode, StreamDecrypter},
 };
 
 pub mod s2n_tls_intercept;
 pub mod transcript;
+pub mod key_manager;
 
 // basic test -> 1 message, 1 record,
 // harder test -> 2 messages, 1 record,
@@ -23,7 +24,9 @@ pub mod transcript;
 /// over some generic type implementing Read + Write. E.g. `openssl::SslStream`
 pub struct DecryptingPipe<T> {
     pub pipe: T,
-    pub decrypter: StreamDecrypter,
+    // currently the mutex is a really ugly way for us to maintain access to this. 
+    // need something better.
+    pub decrypter: Arc<Mutex<StreamDecrypter>>,
     pub identity: Option<Mode>,
 }
 
@@ -31,7 +34,7 @@ impl<T: std::io::Read + std::io::Write> DecryptingPipe<T> {
     pub fn new(key_manager: KeyManager, pipe: T) -> Self {
         Self {
             pipe,
-            decrypter: StreamDecrypter::new(key_manager),
+            decrypter: Arc::new(Mutex::new(StreamDecrypter::new(key_manager))),
             identity: None,
         }
     }
@@ -75,9 +78,9 @@ impl<T: std::io::Read> std::io::Read for DecryptingPipe<T> {
 
         let peer = self.identity.unwrap().peer();
 
-        self.decrypter.record_tx(&buf[..read], peer);
-        self.decrypter.assemble_records(peer);
-        self.decrypter.decrypt_records(peer);
+        self.decrypter.lock().unwrap().record_tx(&buf[..read], peer);
+        self.decrypter.lock().unwrap().assemble_records(peer);
+        self.decrypter.lock().unwrap().decrypt_records(peer).unwrap();
 
         Ok(read)
     }
@@ -94,9 +97,9 @@ impl<T: std::io::Write> std::io::Write for DecryptingPipe<T> {
 
         let identity = self.identity.unwrap();
 
-        self.decrypter.record_tx(&buf[..written], identity);
-        self.decrypter.assemble_records(self.identity.unwrap());
-        self.decrypter.decrypt_records(self.identity.unwrap());
+        self.decrypter.lock().unwrap().record_tx(&buf[..written], identity);
+        self.decrypter.lock().unwrap().assemble_records(self.identity.unwrap());
+        self.decrypter.lock().unwrap().decrypt_records(self.identity.unwrap()).unwrap();
 
         Ok(written)
     }

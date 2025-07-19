@@ -405,6 +405,11 @@ mod signature_scheme_tests {
         );
         assert_eq!(SignatureScheme::from_value(VALUE), Some(SIGNATURE));
     }
+
+    #[test]
+    fn mldsa() {
+        let dsa = SignatureScheme::from_value(2309).unwrap();
+    }
 }
 
 #[cfg(test)]
