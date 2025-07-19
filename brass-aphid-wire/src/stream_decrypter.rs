@@ -1,5 +1,6 @@
 use crate::{
     codec::{DecodeValue, DecodeValueWithContext, EncodeValue},
+    decryption::s2n_tls_intercept::{generic_recv_cb, generic_send_cb},
     iana::{self, Protocol},
     key_log::NssLog,
     protocol::{
@@ -13,6 +14,7 @@ use aws_lc_rs::{
 };
 use std::{
     collections::HashMap,
+    ffi::c_void,
     fmt::Debug,
     io::{Read, Write},
     pin::Pin,
@@ -26,7 +28,7 @@ pub enum Mode {
 }
 
 impl Mode {
-    fn peer(&self) -> Mode {
+    pub fn peer(&self) -> Mode {
         match self {
             Mode::Client => Mode::Server,
             Mode::Server => Mode::Client,
@@ -105,12 +107,23 @@ impl TlsKeys {
 }
 
 impl KeyManager {
-    fn new() -> Self {
+    pub fn new() -> Self {
         let value = Arc::pin(Mutex::new(HashMap::new()));
         Self(value)
     }
 
-    unsafe extern "C" fn key_log_cb(
+    pub fn enable_s2n_logging(&self, config: &mut s2n_tls::config::Builder) {
+        unsafe {
+            config
+                .set_key_log_callback(
+                    Some(Self::s2n_tls_key_log_cb),
+                    self as *const KeyManager as *mut c_void,
+                )
+                .unwrap();
+        }
+    }
+
+    unsafe extern "C" fn s2n_tls_key_log_cb(
         ctx: *mut std::ffi::c_void,
         _conn: *mut s2n_tls_sys::s2n_connection,
         logline: *mut u8,
@@ -313,6 +326,24 @@ impl KeySpace {
     }
 }
 
+/// The StreamDecrypter is responsible for actually decrypting the TLS traffic
+///
+/// The decrypt pipeline goes
+/// 1. tx_byte_buffer: data is buffered here until a complete record has been gathered
+/// 2. tx_record_buffer: records are buffered here until a complete message can be read
+///
+/// TODO: This representation is a poor one for the eldritch nightmare that is technically
+/// allowed by TLS record framing
+/// ```text
+/// |   message 1 |  message 2  | message 3  |
+/// |  r1   |   r2      |     r3    |   r4   |
+/// ```
+/// I affectionately refer to this as "polyrhythm records".
+///
+/// We currently just assume that messages fit in a record which is very not right.
+/// We probably want to adapt the tx_record_buffer to be a stream of the concatenated
+/// plaintexts from the decrypted records that we receive
+/// stream[space][content_type]
 pub struct StreamDecrypter {
     /// The identity of this decrypter, either "client" or "server".
     ///
@@ -328,18 +359,17 @@ pub struct StreamDecrypter {
     selected_protocol: Option<Protocol>,
 
     /// all tx calls are buffered here until there is enough to read a message
-    raw_server_tx: Vec<u8>,
-    raw_client_tx: Vec<u8>,
+    server_tx_byte_buffer: Vec<u8>,
+    client_tx_byte_buffer: Vec<u8>,
 
     /// records, populated from tx
-    server_record_tx: Vec<Vec<u8>>,
-    client_record_tx: Vec<Vec<u8>>,
+    server_tx_record_buffer: Vec<Vec<u8>>,
+    client_tx_record_buffer: Vec<Vec<u8>>,
 
     // these are the "real" send and read callbacks that the client wants to use.
     // In the case of s2n-tls, I plan to steal them from inside the bindings.
-    intercepted_send: Box<dyn std::io::Write>,
-    intercepted_read: Box<dyn std::io::Read>,
-
+    // intercepted_send: Box<dyn std::io::Write>,
+    // intercepted_read: Box<dyn std::io::Read>,
     key_manager: KeyManager,
     // TODO: 2 different key spaces for client and server. They could stack key
     // updates on top of each other and we need to be able to handle that.
@@ -348,21 +378,10 @@ pub struct StreamDecrypter {
     pub transcript: Vec<(Mode, ContentValue)>,
 }
 
-impl Debug for StreamDecrypter {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("StreamDecrypter")
-            .field("raw_client_tx", &self.raw_client_tx.len())
-            .field("raw_server_tx", &self.raw_server_tx.len())
-            .field("client_record_tx", &self.client_record_tx.len())
-            .field("server_record_tx", &self.server_record_tx.len())
-            .finish()
-    }
-}
-
 impl StreamDecrypter {
-    fn new(
-        send: Box<dyn std::io::Write>,
-        read: Box<dyn std::io::Read>,
+    pub fn new(
+        // send: Box<dyn std::io::Write>,
+        // read: Box<dyn std::io::Read>,
         key_manager: KeyManager,
     ) -> Self {
         Self {
@@ -370,26 +389,69 @@ impl StreamDecrypter {
             client_random: None,
             selected_cipher: None,
             selected_protocol: None,
-            raw_server_tx: Vec::new(),
-            raw_client_tx: Vec::new(),
-            server_record_tx: Vec::new(),
-            client_record_tx: Vec::new(),
-            intercepted_send: send,
-            intercepted_read: read,
+            server_tx_byte_buffer: Vec::new(),
+            client_tx_byte_buffer: Vec::new(),
+            server_tx_record_buffer: Vec::new(),
+            client_tx_record_buffer: Vec::new(),
+            // intercepted_send: send,
+            // intercepted_read: read,
             key_manager,
             current_space: None,
             transcript: Vec::new(),
         }
     }
 
-    fn assemble_records(&mut self, mode: Mode) -> std::io::Result<()> {
+    /// Record a transmitted bytes.
+    ///
+    /// To record received bytes, this method can just be called with a swapped
+    /// mode. E.g. Receiving bytes from the client can be recorded as a client
+    /// transmissions.
+    pub fn record_tx(&mut self, bytes: &[u8], sender: Mode) {
+        match sender {
+            Mode::Client => self.client_tx_byte_buffer.extend_from_slice(bytes),
+            Mode::Server => self.server_tx_byte_buffer.extend_from_slice(bytes),
+        };
+    }
+
+    pub fn dump_transcript(&self, file: &str) {
+        let transcript = format!("{:#?}", self.transcript);
+        std::fs::write(file, transcript).unwrap();
+    }
+
+    // pub fn enable_s2n_connection_decryption(
+    //     decrypter: &Box<Self>,
+    //     connection: &mut s2n_tls::connection::Connection,
+    // ) {
+    //     connection
+    //         .set_send_callback(Some(generic_send_cb::<StreamDecrypter>))
+    //         .unwrap();
+    //     connection
+    //         .set_receive_callback(Some(generic_recv_cb::<StreamDecrypter>))
+    //         .unwrap();
+    //     unsafe {
+    //         connection
+    //             .set_send_context(decrypter.as_ref() as *const StreamDecrypter as *mut c_void)
+    //             .unwrap();
+    //         connection
+    //             .set_receive_context(decrypter.as_ref() as *const StreamDecrypter as *mut c_void)
+    //             .unwrap();
+    //     }
+    // }
+
+    pub fn assemble_records(&mut self, mode: Mode) -> std::io::Result<()> {
         // TODO: error handling. We currently assume that all errors are just because
         // there isn't enough data. Which will not be true into the future. Also
         // should think more about the "not enough data" error.
 
         let (raw, records) = match mode {
-            Mode::Client => (&mut self.raw_client_tx, &mut self.client_record_tx),
-            Mode::Server => (&mut self.raw_server_tx, &mut self.server_record_tx),
+            Mode::Client => (
+                &mut self.client_tx_byte_buffer,
+                &mut self.client_tx_record_buffer,
+            ),
+            Mode::Server => (
+                &mut self.server_tx_byte_buffer,
+                &mut self.server_tx_record_buffer,
+            ),
         };
 
         // multiple records may have been sent, so loop
@@ -411,12 +473,12 @@ impl StreamDecrypter {
         Ok(())
     }
 
-    fn decrypt_records(&mut self, mode: Mode) -> std::io::Result<()> {
+    pub fn decrypt_records(&mut self, mode: Mode) -> std::io::Result<()> {
         // for each record
         println!("------------ {mode:?} ------------");
         let records = match mode {
-            Mode::Client => &mut self.client_record_tx,
-            Mode::Server => &mut self.server_record_tx,
+            Mode::Client => &mut self.client_tx_record_buffer,
+            Mode::Server => &mut self.server_tx_record_buffer,
         };
 
         for record in records.drain(..) {
@@ -556,307 +618,80 @@ impl StreamDecrypter {
     }
 }
 
+impl Debug for StreamDecrypter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StreamDecrypter")
+            .field("raw_client_tx", &self.client_tx_byte_buffer.len())
+            .field("raw_server_tx", &self.server_tx_byte_buffer.len())
+            .field("client_record_tx", &self.client_tx_record_buffer.len())
+            .field("server_record_tx", &self.server_tx_record_buffer.len())
+            .finish()
+    }
+}
+
 // designed to work with an IO callback based pattern, such as that used by s2n-tls
 // and OpenSSL
-impl std::io::Read for StreamDecrypter {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.identity.is_none() {
-            // reading first is server behavior
-            self.identity = Some(Mode::Server);
-        }
+// impl std::io::Read for StreamDecrypter {
+//     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+//         if self.identity.is_none() {
+//             // reading first is server behavior
+//             self.identity = Some(Mode::Server);
+//         }
 
-        let read = self.intercepted_read.read(buf)?;
+//         let read = self.intercepted_read.read(buf)?;
 
-        match self.identity.unwrap() {
-            Mode::Client => self.raw_server_tx.extend_from_slice(&buf[..read]),
-            Mode::Server => self.raw_client_tx.extend_from_slice(&buf[..read]),
-        }
+//         match self.identity.unwrap() {
+//             Mode::Client => self.server_tx_byte_buffer.extend_from_slice(&buf[..read]),
+//             Mode::Server => self.client_tx_byte_buffer.extend_from_slice(&buf[..read]),
+//         }
 
-        let peer = self.identity.unwrap().peer();
-        self.assemble_records(peer);
-        self.decrypt_records(peer);
+//         let peer = self.identity.unwrap().peer();
+//         self.assemble_records(peer);
+//         self.decrypt_records(peer);
 
-        Ok(read)
-    }
-}
+//         Ok(read)
+//     }
+// }
 
-impl std::io::Write for StreamDecrypter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if self.identity.is_none() {
-            // writing first is client behavior
-            self.identity = Some(Mode::Client);
-        }
+// impl std::io::Write for StreamDecrypter {
+//     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+//         if self.identity.is_none() {
+//             // writing first is client behavior
+//             self.identity = Some(Mode::Client);
+//         }
 
-        let written = self.intercepted_send.write(buf)?;
+//         let written = self.intercepted_send.write(buf)?;
 
-        match self.identity.unwrap() {
-            Mode::Client => self.raw_client_tx.extend_from_slice(&buf[..written]),
-            Mode::Server => self.raw_server_tx.extend_from_slice(&buf[..written]),
-        }
+//         match self.identity.unwrap() {
+//             Mode::Client => self.client_tx_byte_buffer.extend_from_slice(&buf[..written]),
+//             Mode::Server => self.server_tx_byte_buffer.extend_from_slice(&buf[..written]),
+//         }
 
-        self.assemble_records(self.identity.unwrap());
-        self.decrypt_records(self.identity.unwrap());
+//         self.assemble_records(self.identity.unwrap());
+//         self.decrypt_records(self.identity.unwrap());
 
-        Ok(written)
-    }
+//         Ok(written)
+//     }
 
-    fn flush(&mut self) -> std::io::Result<()> {
-        /* no op */
-        Ok(())
-    }
-}
+//     fn flush(&mut self) -> std::io::Result<()> {
+//         /* no op */
+//         Ok(())
+//     }
+// }
 
 #[cfg(test)]
 mod s2n_tls_decryption {
     use crate::{
-        decryption::s2n_tls_intercept::{
-            generic_recv_cb, generic_send_cb, intercept_recv_callback, intercept_send_callback,
+        decryption::{
+            s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe},
+            DecryptingPipe,
         },
         protocol::HandshakeMessageHeader,
     };
 
     use super::*;
 
-    use std::ffi::c_void;
-
     use s2n_tls::testing::TestPair;
-
-    pub fn s2n_server_config(
-        security_policy: &str,
-        cert_type: &[SigType],
-    ) -> Result<s2n_tls::config::Builder, Box<dyn std::error::Error>> {
-        let policy = s2n_tls::security::Policy::from_version(security_policy)?;
-
-        let mut builder = s2n_tls::config::Config::builder();
-        builder.with_system_certs(false)?;
-        builder.set_security_policy(&policy)?;
-        builder.set_max_blinding_delay(0)?;
-
-        unsafe { builder.disable_x509_verification().unwrap() };
-
-        for ct in cert_type {
-            builder.trust_pem(&read_to_bytes(PemType::CACert, *ct))?;
-            let cert = read_to_bytes(PemType::ServerCertChain, *ct);
-            let key = read_to_bytes(PemType::ServerKey, *ct);
-            builder.load_pem(&cert, &key)?;
-        }
-
-        Ok(builder)
-    }
-
-    #[derive(Clone, Copy, strum::EnumIter)]
-    pub enum PemType {
-        ServerKey,
-        ServerCertChain,
-        ClientKey,
-        ClientCertChain,
-        CACert,
-    }
-
-    impl PemType {
-        fn get_filename(&self) -> &str {
-            match self {
-                PemType::ServerKey => "server-key.pem",
-                PemType::ServerCertChain => "server-chain.pem",
-                PemType::ClientKey => "client-key.pem",
-                PemType::ClientCertChain => "client-cert.pem",
-                PemType::CACert => "ca-cert.pem",
-            }
-        }
-    }
-
-    #[derive(Clone, Copy, Default, strum::EnumIter)]
-    pub enum SigType {
-        Rsa2048,
-        Rsa3072,
-        Rsa4096,
-        #[default]
-        Ecdsa384,
-        Ecdsa256,
-        Ecdsa521,
-        Rsassa2048,
-    }
-
-    impl SigType {
-        pub fn get_dir_name(&self) -> &str {
-            match self {
-                SigType::Rsa2048 => "rsa2048",
-                SigType::Rsa3072 => "rsa3072",
-                SigType::Rsa4096 => "rsa4096",
-                SigType::Rsassa2048 => "rsapss2048",
-                SigType::Ecdsa256 => "ecdsa256",
-                SigType::Ecdsa384 => "ecdsa384",
-                SigType::Ecdsa521 => "ecdsa521",
-            }
-        }
-    }
-
-    pub fn get_cert_path(pem_type: PemType, sig_type: SigType) -> String {
-        format!(
-            "certs/{}/{}",
-            sig_type.get_dir_name(),
-            pem_type.get_filename()
-        )
-    }
-
-    fn read_to_bytes(pem_type: PemType, sig_type: SigType) -> Vec<u8> {
-        std::fs::read_to_string(get_cert_path(pem_type, sig_type))
-            .unwrap()
-            .into_bytes()
-    }
-
-    #[test]
-    fn s2n_server_test() -> anyhow::Result<()> {
-        // 1 key logger
-        // 2 config
-        // 3 test pair
-        // 4 intercepted callbacks
-        // 5 decrypted
-
-        let key_manager = KeyManager::new();
-
-        let client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
-        let mut server_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
-        unsafe {
-            server_config.set_key_log_callback(
-                Some(KeyManager::key_log_cb),
-                &key_manager as *const KeyManager as *mut c_void,
-            )?
-        };
-        let mut test_pair =
-            TestPair::from_configs(&client_config.build()?, &server_config.build()?);
-
-        test_pair
-            .client
-            .set_server_name("omg💅heyyy✨bestie💖lets👪do💌tls🔒")
-            .unwrap();
-
-        // let server send_cb
-        let send = intercept_send_callback(&test_pair, s2n_tls::enums::Mode::Server);
-        let recv = intercept_recv_callback(&test_pair, s2n_tls::enums::Mode::Server);
-
-        let stream_decrypter = StreamDecrypter::new(Box::new(send), Box::new(recv), key_manager);
-
-        let stream_decrypter = Box::new(stream_decrypter);
-        test_pair
-            .server
-            .set_send_callback(Some(generic_send_cb::<StreamDecrypter>))?;
-        test_pair
-            .server
-            .set_receive_callback(Some(generic_recv_cb::<StreamDecrypter>))?;
-        unsafe {
-            test_pair.server.set_send_context(
-                stream_decrypter.as_ref() as *const StreamDecrypter as *mut c_void,
-            )?;
-            test_pair
-                .server
-                .set_receive_context(
-                    stream_decrypter.as_ref() as *const StreamDecrypter as *mut c_void
-                )?;
-        }
-
-        test_pair.handshake().unwrap();
-
-        let mut message_buffer = [0; b"i am the client".len()];
-
-        test_pair.client.poll_send(b"i am the client");
-        test_pair.server.poll_recv(&mut message_buffer);
-
-        test_pair.server.poll_send(b"i am the server");
-        test_pair.client.poll_recv(&mut message_buffer);
-
-        test_pair.client.poll_shutdown();
-        test_pair.server.poll_shutdown();
-        let mut messages = stream_decrypter.transcript;
-        println!("{messages:?}");
-        // should just use vec deque
-        let mut messages = messages.drain(..);
-
-        // handshake starts
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))
-        ));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
-        ));
-
-        // encrypted data
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::EncryptedExtensions(_))
-        ));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::CertificateTls13(_))
-        ));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::CertVerifyTls13(_))
-        ));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::Finished(_))
-        ));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert!(matches!(
-            message,
-            ContentValue::Handshake(HandshakeMessageValue::Finished(_))
-        ));
-
-        // handshake finished -> application data
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        if let ContentValue::ApplicationData(data) = message {
-            assert_eq!(&data, b"i am the client");
-        } else {
-            panic!("unexpected message");
-        }
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        if let ContentValue::ApplicationData(data) = message {
-            assert_eq!(&data, b"i am the server");
-        } else {
-            panic!("unexpected message");
-        }
-
-        // application finished -> alerts
-
-        // these are "backwards" because the server.poll_shutdown() will first read
-        // and then write
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(message, ContentValue::Alert(_)));
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert!(matches!(message, ContentValue::Alert(_)));
-
-        assert!(messages.next().is_none());
-
-        Ok(())
-    }
 
     #[test]
     fn traffic_key_derivation() {

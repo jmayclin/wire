@@ -7,7 +7,7 @@ pub mod protocol;
 #[cfg(test)]
 pub mod testing;
 
-mod stream_decrypter;
+pub mod stream_decrypter;
 
 mod discriminant {
     macro_rules! impl_byte_value {

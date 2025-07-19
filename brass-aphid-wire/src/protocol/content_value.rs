@@ -4,9 +4,10 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateTls12ish, CertificateTls13, ChangeCipherSpec,
-        ClientHello, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType,
-        ServerHello, ServerKeyExchange,
+        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13,
+        ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished,
+        HandshakeMessageHeader, HandshakeType, NewSessionTicketTls13, ServerHello,
+        ServerKeyExchange,
     },
 };
 
@@ -18,6 +19,19 @@ pub enum ContentValue {
     ChangeCipherSpec(ChangeCipherSpec),
 }
 
+impl ContentValue {
+    pub fn content_type(&self) -> ContentType {
+        match self {
+            ContentValue::Alert(_) => ContentType::Alert,
+            ContentValue::ApplicationData(_) => ContentType::ApplicationData,
+            ContentValue::Handshake(_) => ContentType::Handshake,
+            ContentValue::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
+        }
+    }
+}
+
+// TODO: I am inconsistent about when I specify "Tls13" and when it's just the plain
+// name. It should only be used on messages where the struct is actually different
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandshakeMessageValue {
     ClientHello(ClientHello),
@@ -27,6 +41,8 @@ pub enum HandshakeMessageValue {
     CertificateTls12ish(CertificateTls12ish),
     ServerKeyExchange(ServerKeyExchange),
     CertVerifyTls13(CertVerifyTls13),
+    CertificateRequestTls13(CertificateRequest),
+    NewSessionTicketTls13(NewSessionTicketTls13),
     Finished(Finished),
 }
 
@@ -51,7 +67,18 @@ impl HandshakeMessageValue {
                 let (message, buffer) = buffer.decode_value()?;
                 (HandshakeMessageValue::ServerHello(message), buffer)
             }
-            HandshakeType::NewSessionTicket => todo!(),
+            HandshakeType::NewSessionTicket => {
+                let context = needs_protocol(message_header.handshake_type, protocol)?;
+                if context == Protocol::TLSv1_3 {
+                    let (message, buffer) = buffer.decode_value()?;
+                    (
+                        HandshakeMessageValue::NewSessionTicketTls13(message),
+                        buffer,
+                    )
+                } else {
+                    todo!();
+                }
+            }
             HandshakeType::EndOfEarlyData => todo!(),
             HandshakeType::EncryptedExtensions => {
                 let (message, buffer) = buffer.decode_value()?;
@@ -73,7 +100,13 @@ impl HandshakeMessageValue {
                     ServerKeyExchange::decode_from_with_context(buffer, cipher)?;
                 (HandshakeMessageValue::ServerKeyExchange(message), buffer)
             }
-            HandshakeType::CertificateRequest => todo!(),
+            HandshakeType::CertificateRequest => {
+                let (message, buffer) = buffer.decode_value()?;
+                (
+                    HandshakeMessageValue::CertificateRequestTls13(message),
+                    buffer,
+                )
+            }
             HandshakeType::ServerHelloDone => todo!(),
             HandshakeType::CertificateVerify => {
                 let (message, buffer) = buffer.decode_value()?;

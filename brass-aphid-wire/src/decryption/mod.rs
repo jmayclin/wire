@@ -1,3 +1,10 @@
+use std::ffi::c_void;
+
+use crate::{
+    decryption::s2n_tls_intercept::{generic_recv_cb, generic_send_cb},
+    stream_decrypter::{KeyManager, Mode, StreamDecrypter},
+};
+
 pub mod s2n_tls_intercept;
 pub mod transcript;
 
@@ -11,3 +18,91 @@ pub mod transcript;
 // it probably is allowed
 // |         record          |        record     |
 // |  message   |    message        |  message   |
+
+/// This makes it easy to decrypt the traffic from a TLS implementation which operates
+/// over some generic type implementing Read + Write. E.g. `openssl::SslStream`
+pub struct DecryptingPipe<T> {
+    pub pipe: T,
+    pub decrypter: StreamDecrypter,
+    pub identity: Option<Mode>,
+}
+
+impl<T: std::io::Read + std::io::Write> DecryptingPipe<T> {
+    pub fn new(key_manager: KeyManager, pipe: T) -> Self {
+        Self {
+            pipe,
+            decrypter: StreamDecrypter::new(key_manager),
+            identity: None,
+        }
+    }
+
+    /// Used to decrypt s2n-tls connections
+    ///
+    /// First the underlying "real" connection IO stuff needs to be retrieved and
+    /// packaged into an `ArchaicCPipe`. At that point this can be used to set the
+    /// appropriate callbacks on s2n-tls.
+    pub fn enable_s2n_tls_decryption(
+        decrypter: &Box<Self>,
+        connection: &mut s2n_tls::connection::Connection,
+    ) {
+        connection
+            .set_send_callback(Some(generic_send_cb::<Self>))
+            .unwrap();
+        connection
+            .set_receive_callback(Some(generic_recv_cb::<Self>))
+            .unwrap();
+        unsafe {
+            connection
+                .set_send_context(decrypter.as_ref() as *const Self as *mut c_void)
+                .unwrap();
+            connection
+                .set_receive_context(decrypter.as_ref() as *const Self as *mut c_void)
+                .unwrap();
+        }
+    }
+}
+
+// designed to work with an IO callback based pattern, such as that used by s2n-tls
+// and OpenSSL
+impl<T: std::io::Read> std::io::Read for DecryptingPipe<T> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.identity.is_none() {
+            // reading first is server behavior
+            self.identity = Some(Mode::Server);
+        }
+
+        let read = self.pipe.read(buf)?;
+
+        let peer = self.identity.unwrap().peer();
+
+        self.decrypter.record_tx(&buf[..read], peer);
+        self.decrypter.assemble_records(peer);
+        self.decrypter.decrypt_records(peer);
+
+        Ok(read)
+    }
+}
+
+impl<T: std::io::Write> std::io::Write for DecryptingPipe<T> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if self.identity.is_none() {
+            // writing first is client behavior
+            self.identity = Some(Mode::Client);
+        }
+
+        let written = self.pipe.write(buf)?;
+
+        let identity = self.identity.unwrap();
+
+        self.decrypter.record_tx(&buf[..written], identity);
+        self.decrypter.assemble_records(self.identity.unwrap());
+        self.decrypter.decrypt_records(self.identity.unwrap());
+
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        /* no op */
+        Ok(())
+    }
+}

@@ -107,6 +107,34 @@ impl std::io::Read for InterceptedRecvCallback {
     }
 }
 
+pub struct ArchaicCPipe {
+    send: InterceptedSendCallback,
+    recv: InterceptedRecvCallback,
+}
+
+impl ArchaicCPipe {
+    pub fn new(send: InterceptedSendCallback, recv: InterceptedRecvCallback) -> Self {
+        Self { send, recv }
+    }
+}
+
+impl std::io::Read for ArchaicCPipe {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        self.recv.read(buf)
+    }
+}
+
+impl std::io::Write for ArchaicCPipe {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.send.write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        /* no op */
+        Ok(())
+    }
+}
+
 /// Reconstruct the send callback used for the TestPair connections.
 ///
 /// There is not getter for this, so we have to "reconstruct" them. If the TestPair

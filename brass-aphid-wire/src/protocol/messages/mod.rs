@@ -218,7 +218,7 @@ pub struct EncryptedExtensions {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.3.2
-#[derive(Debug, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertificateRequest {
     pub certificate_request_context: PrefixedBlob<u8>,
     pub extensions: PrefixedBlob<u16>,
@@ -352,6 +352,16 @@ impl DecodeValueWithContext for Finished {
         let value = Self { verify_data };
         Ok((value, buffer))
     }
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.1
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct NewSessionTicketTls13 {
+    pub ticket_lifetime: u32,
+    pub ticket_age_add: u32,
+    pub ticket_nonce: PrefixedBlob<u8>,
+    pub ticket: PrefixedBlob<u16>,
+    pub extensions: PrefixedList<Extension, u16>,
 }
 
 /// CertificateVerify definition: https://www.rfc-editor.org/rfc/rfc8446#section-4.4.3
