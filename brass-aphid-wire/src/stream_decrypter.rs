@@ -1,11 +1,7 @@
 use crate::{
     codec::{DecodeValue, DecodeValueWithContext, EncodeValue},
-    decryption::{
-        key_manager::KeyManager,
-        s2n_tls_intercept::{generic_recv_cb, generic_send_cb},
-    },
+    decryption::key_manager::KeyManager,
     iana::{self, Protocol},
-    key_log::NssLog,
     protocol::{
         content_value::{ContentValue, HandshakeMessageValue},
         Alert, ChangeCipherSpec, ContentType, RecordHeader,
@@ -16,11 +12,7 @@ use aws_lc_rs::{
     hkdf::{self},
 };
 use std::{
-    collections::HashMap,
-    ffi::c_void,
     fmt::Debug,
-    io::{Read, Write},
-    pin::Pin,
     sync::{Arc, Mutex},
 };
 
@@ -249,7 +241,7 @@ pub struct StreamDecrypter {
 
     // client_wants: Option<KeySchedule>,
     // server_wants: Option<KeySchedule>,
-    pub transcript: Vec<(Mode, ContentValue)>,
+    pub transcript: Arc<Mutex<Vec<(Mode, ContentValue)>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -281,7 +273,7 @@ impl StreamDecrypter {
             current_client_space: None,
             client_need: None,
             server_need: None,
-            transcript: Vec::new(),
+            transcript: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -365,7 +357,10 @@ impl StreamDecrypter {
                     ContentType::Alert => {
                         let (alert, record_buffer) = Alert::decode_from(record_buffer)?;
                         println!("{alert:?}");
-                        self.transcript.push((mode, ContentValue::Alert(alert)));
+                        self.transcript
+                            .lock()
+                            .unwrap()
+                            .push((mode, ContentValue::Alert(alert)));
                         record_buffer
                     }
                     ContentType::Handshake => {
@@ -394,6 +389,8 @@ impl StreamDecrypter {
 
                         println!("{handshake_message:?}");
                         self.transcript
+                            .lock()
+                            .unwrap()
                             .push((mode, ContentValue::Handshake(handshake_message)));
 
                         record_buffer
@@ -403,11 +400,15 @@ impl StreamDecrypter {
                         match mode {
                             Mode::Client => {
                                 if self.client_need == Some(KeySchedule::Traffic) {
-                                    self.current_client_space = self.key_manager.application_space(
-                                        Mode::Client,
-                                        self.client_random.as_ref().unwrap(),
-                                        self.selected_cipher.unwrap(),
-                                    ).unwrap().into();
+                                    self.current_client_space = self
+                                        .key_manager
+                                        .application_space(
+                                            Mode::Client,
+                                            self.client_random.as_ref().unwrap(),
+                                            self.selected_cipher.unwrap(),
+                                        )
+                                        .unwrap()
+                                        .into();
                                     self.client_need = None;
                                 }
                                 if self.current_client_space.is_none() {
@@ -515,7 +516,7 @@ impl StreamDecrypter {
                             ),
                         };
                         println!("content value: {value:#?}");
-                        self.transcript.push((mode, value));
+                        self.transcript.lock().unwrap().push((mode, value));
 
                         &[]
                     }
@@ -540,17 +541,9 @@ impl Debug for StreamDecrypter {
 
 #[cfg(test)]
 mod s2n_tls_decryption {
-    use crate::{
-        decryption::{
-            s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe},
-            DecryptingPipe,
-        },
-        protocol::HandshakeMessageHeader,
-    };
+    use crate::protocol::HandshakeMessageHeader;
 
     use super::*;
-
-    use s2n_tls::testing::TestPair;
 
     #[test]
     /// Make sure that the correct traffic key is derived

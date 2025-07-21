@@ -1,15 +1,14 @@
 use std::io::{Read, Write};
 
-use openssl::ssl::{ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode};
-use s2n_tls::testing::TestPair;
+use openssl::ssl::{
+    ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode,
+};
 
 use crate::{
-    decryption::{
-        key_manager::KeyManager, s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe}, DecryptingPipe
-    },
+    decryption::{key_manager::KeyManager, DecryptingPipe},
     protocol::content_value::{ContentValue, HandshakeMessageValue},
     stream_decrypter::Mode,
-    testing::utilities::{get_cert_path, s2n_server_config, PemType, SigType},
+    testing::utilities::{get_cert_path, PemType, SigType},
 };
 
 #[test]
@@ -40,7 +39,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
         builder.build()
     };
 
-    let client =  Ssl::new(&client_config)?;
+    let client = Ssl::new(&client_config)?;
     let server = Ssl::new(&server_config)?;
 
     let server_tcp = std::net::TcpListener::bind("127.0.0.1:0")?;
@@ -62,22 +61,25 @@ fn openssl_server_test() -> anyhow::Result<()> {
                 assert_eq!(state, ShutdownResult::Received);
             }
         });
-        let decrypter = s.spawn(move || {
-            let client_stream = std::net::TcpStream::connect(server_addr).unwrap();
-            let decrypting_pipe = DecryptingPipe::new(key_manager, client_stream);
-            let decrypter = decrypting_pipe.decrypter.clone();
-            let mut stream = SslStream::new(client, decrypting_pipe).unwrap();
-            stream.connect().unwrap();
-            stream.write_all(MESSAGE);
-            let shutdown_state = stream.shutdown().unwrap();
-            if shutdown_state != ShutdownResult::Received {
-                let state = stream.shutdown().unwrap();
-                assert_eq!(state, ShutdownResult::Received);
-            }
-            decrypter
-        }).join().unwrap();
-        let decrypter = decrypter.lock().unwrap();
-        decrypter.transcript.clone()
+        let transcript = s
+            .spawn(move || {
+                let client_stream = std::net::TcpStream::connect(server_addr).unwrap();
+                let decrypting_pipe = DecryptingPipe::new(key_manager, client_stream);
+                let decrypter = decrypting_pipe.decrypter.transcript.clone();
+                let mut stream = SslStream::new(client, decrypting_pipe).unwrap();
+                stream.connect().unwrap();
+                stream.write_all(MESSAGE);
+                let shutdown_state = stream.shutdown().unwrap();
+                if shutdown_state != ShutdownResult::Received {
+                    let state = stream.shutdown().unwrap();
+                    assert_eq!(state, ShutdownResult::Received);
+                }
+                decrypter
+            })
+            .join()
+            .unwrap();
+        let transcript = transcript.lock().unwrap();
+        transcript.clone()
     });
 
     let mut messages = transcript.drain(..);
@@ -151,11 +153,17 @@ fn openssl_server_test() -> anyhow::Result<()> {
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::NewSessionTicketTls13(_))));
+    assert!(matches!(
+        message,
+        ContentValue::Handshake(HandshakeMessageValue::NewSessionTicketTls13(_))
+    ));
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert!(matches!(message, ContentValue::Handshake(HandshakeMessageValue::NewSessionTicketTls13(_))));
+    assert!(matches!(
+        message,
+        ContentValue::Handshake(HandshakeMessageValue::NewSessionTicketTls13(_))
+    ));
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);

@@ -371,7 +371,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::EncryptThenMac => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::EncryptThenMac(value)
-            },
+            }
             ExtensionType::ExtendedMasterSecret => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::ExtendedMasterSecret(value)

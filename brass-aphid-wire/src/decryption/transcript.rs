@@ -1,4 +1,4 @@
-use crate::decryption::s2n_tls_intercept::{self, intercept_send_callback};
+use crate::decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides};
 use s2n_tls::{enums::Mode, testing::TestPair};
 use std::{cell::RefCell, ffi::c_void, io::Write, pin::Pin, sync::Arc};
 
@@ -29,7 +29,7 @@ impl TestPairTranscript {
         let records = Arc::pin(RefCell::new(Vec::new()));
 
         // configure client
-        let client_send = intercept_send_callback(pair, Mode::Client);
+        let client_send = pair.client.steal_send_cb();
         let client_record_handle =
             RecordingSendHandle::new(Mode::Client, records.clone(), client_send);
         let client_boxed = Box::new(client_record_handle);
@@ -41,7 +41,7 @@ impl TestPairTranscript {
             .unwrap();
         unsafe { pair.client.set_send_context(client_boxed.as_ref() as *const RecordingSendHandle as *mut c_void) }.unwrap();
 
-        let server_send = intercept_send_callback(pair, Mode::Server);
+        let server_send = pair.server.steal_send_cb();
         let server_record_handle =
             RecordingSendHandle::new(Mode::Server, records.clone(), server_send);
         let server_boxed = Box::new(server_record_handle);

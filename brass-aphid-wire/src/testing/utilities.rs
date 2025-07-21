@@ -1,4 +1,3 @@
-
 pub fn s2n_server_config(
     security_policy: &str,
     cert_type: &[SigType],

@@ -1,9 +1,7 @@
 use s2n_tls::testing::TestPair;
 
 use crate::{
-    decryption::{
-        key_manager::KeyManager, s2n_tls_intercept::{intercept_recv_callback, intercept_send_callback, ArchaicCPipe}, DecryptingPipe
-    },
+    decryption::{key_manager::KeyManager, DecryptingPipe},
     protocol::content_value::{ContentValue, HandshakeMessageValue},
     stream_decrypter::Mode,
     testing::utilities::{s2n_server_config, SigType},
@@ -23,12 +21,7 @@ fn s2n_server_test() -> anyhow::Result<()> {
         .set_server_name("omg💅heyyy✨bestie💖lets👪do💌tls🔒")
         .unwrap();
 
-    // let server send_cb
-    let send = intercept_send_callback(&test_pair, s2n_tls::enums::Mode::Server);
-    let recv = intercept_recv_callback(&test_pair, s2n_tls::enums::Mode::Server);
-    let nasty_pipe = ArchaicCPipe::new(send, recv);
-
-    let decrypting_stream = DecryptingPipe::new(key_manager, nasty_pipe);
+    let decrypting_stream = DecryptingPipe::s2n_tls_decrypter(key_manager, &mut test_pair.server);
 
     let stream_decrypter = Box::new(decrypting_stream);
     DecryptingPipe::enable_s2n_tls_decryption(&stream_decrypter, &mut test_pair.server);
@@ -53,8 +46,8 @@ fn s2n_server_test() -> anyhow::Result<()> {
     test_pair.server.poll_shutdown_send();
     test_pair.client.poll_recv(&mut [0]);
 
-    let messages = stream_decrypter.decrypter.lock().unwrap().transcript.clone();
-    assert_s2n_decryption_correct(messages);
+    let messages = stream_decrypter.decrypter.transcript.clone();
+    assert_s2n_decryption_correct(messages.lock().unwrap().clone());
 
     Ok(())
 }
@@ -73,12 +66,7 @@ fn s2n_client_test() -> anyhow::Result<()> {
         .set_server_name("omg💅heyyy✨bestie💖lets👪do💌tls🔒")
         .unwrap();
 
-    // let server send_cb
-    let send = intercept_send_callback(&test_pair, s2n_tls::enums::Mode::Client);
-    let recv = intercept_recv_callback(&test_pair, s2n_tls::enums::Mode::Client);
-    let nasty_pipe = ArchaicCPipe::new(send, recv);
-
-    let decrypting_stream = DecryptingPipe::new(key_manager, nasty_pipe);
+    let decrypting_stream = DecryptingPipe::s2n_tls_decrypter(key_manager, &mut test_pair.client);
 
     let stream_decrypter = Box::new(decrypting_stream);
     DecryptingPipe::enable_s2n_tls_decryption(&stream_decrypter, &mut test_pair.client);
@@ -103,7 +91,12 @@ fn s2n_client_test() -> anyhow::Result<()> {
     test_pair.server.poll_shutdown_send();
     test_pair.client.poll_recv(&mut [0]);
 
-    let messages = stream_decrypter.decrypter.lock().unwrap().transcript.clone();
+    let messages = stream_decrypter
+        .decrypter
+        .transcript
+        .lock()
+        .unwrap()
+        .clone();
     assert_s2n_decryption_correct(messages);
 
     Ok(())

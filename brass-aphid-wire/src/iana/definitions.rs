@@ -387,7 +387,7 @@ mod signature_scheme_tests {
     fn csv_parsing() {
         let iana_signature_schemes = SignatureScheme::parse_iana_csv();
         println!("{iana_signature_schemes:#?}");
-        assert_eq!(iana_signature_schemes.len(), 34);
+        assert_eq!(iana_signature_schemes.len(), 37);
     }
 
     #[test]

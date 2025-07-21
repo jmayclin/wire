@@ -1,22 +1,12 @@
 use crate::{
-    codec::{DecodeValue, DecodeValueWithContext, EncodeValue},
-    decryption::s2n_tls_intercept::{generic_recv_cb, generic_send_cb},
-    iana::{self, Protocol},
+    iana::{self},
     key_log::NssLog,
-    protocol::{
-        content_value::{ContentValue, HandshakeMessageValue},
-        Alert, ChangeCipherSpec, ContentType, RecordHeader,
-    }, stream_decrypter::{KeySpace, Mode},
-};
-use aws_lc_rs::{
-    aead,
-    hkdf::{self},
+    stream_decrypter::{KeySpace, Mode},
 };
 use std::{
     collections::HashMap,
     ffi::c_void,
     fmt::Debug,
-    io::{Read, Write},
     pin::Pin,
     sync::{Arc, Mutex},
 };
@@ -71,6 +61,12 @@ impl TlsKeys {
 #[derive(Debug, Clone)]
 pub struct KeyManager(Pin<Arc<Mutex<HashMap<Vec<u8>, TlsKeys>>>>);
 
+impl Default for KeyManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KeyManager {
     pub fn new() -> Self {
         let value = Arc::pin(Mutex::new(HashMap::new()));
@@ -117,16 +113,18 @@ impl KeyManager {
     }
 
     /// the key used for initial handshake messages in TLS 1.3
-    pub fn handshake_space(&mut self, mode: Mode, client_random: &[u8], cipher: iana::Cipher) -> Option<KeySpace> {
+    pub fn handshake_space(
+        &mut self,
+        mode: Mode,
+        client_random: &[u8],
+        cipher: iana::Cipher,
+    ) -> Option<KeySpace> {
         let key = self.0.lock().unwrap().get(client_random)?.clone();
         let secret = match mode {
             Mode::Client => key.client_handshake_traffic_secret?,
             Mode::Server => key.server_handshake_traffic_secret?,
         };
-        let space = KeySpace::new(
-            secret,
-            cipher,
-        );
+        let space = KeySpace::new(secret, cipher);
         Some(space)
     }
 
@@ -141,10 +139,7 @@ impl KeyManager {
             Mode::Client => key.client_application_traffic_secret?,
             Mode::Server => key.server_application_traffic_secret?,
         };
-        let space = KeySpace::new(
-            secret,
-            cipher,
-        );
+        let space = KeySpace::new(secret, cipher);
         Some(space)
     }
 }
