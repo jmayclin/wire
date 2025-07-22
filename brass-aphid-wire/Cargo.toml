@@ -22,11 +22,9 @@ errno = "0.3.13"
 libc = "0.2.174"
 aws-lc-rs = "1.0.0"
 hex = "0.4.3"
-s2n-tls-sys = {path = "/home/ubuntu/workspace/s2n-tls/bindings/rust/extended/s2n-tls-sys"}
-# s2n-tls-sys = "0.3.21"
-s2n-tls = {path = "/home/ubuntu/workspace/s2n-tls/bindings/rust/extended/s2n-tls",  features = ["unstable-testing"]}
+s2n-tls-sys = "0.3.21"
 openssl = {version = "0.10.73", features = ["vendored"]}
-# s2n-tls = {version = "0.3", features = ["unstable-testing"]}
+s2n-tls = {version = "0.3", features = ["unstable-testing"]}
 
 [build-dependencies]
 serde_with = "3.12.0"
