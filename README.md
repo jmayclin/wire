@@ -9,12 +9,12 @@
 
 The two main bits of the public API are the `KeyManager` and the `DecryptingPipe`.
 
-`KeyManager` provides that the key logging callback which can be associated with a config like OpenSSL's [`SslContextBuilder::set_keylog_callback`](https://docs.rs/openssl/latest/openssl/ssl/struct.SslContextBuilder.html#method.set_keylog_callback) or s2n-tls's [`Config::set_key_log_callback`](https://docs.rs/s2n-tls/latest/s2n_tls/config/struct.Builder.html#method.set_key_log_callback).
+`KeyManager` provides the key logging callback which can be associated with a config like OpenSSL's [`SslContextBuilder::set_keylog_callback`](https://docs.rs/openssl/latest/openssl/ssl/struct.SslContextBuilder.html#method.set_keylog_callback) or s2n-tls's [`Config::set_key_log_callback`](https://docs.rs/s2n-tls/latest/s2n_tls/config/struct.Builder.html#method.set_key_log_callback).
 
 `DecryptingPipe` will wrap some type `T` which implements `Read` and `Write`. This is designed to work with interfaces like OpenSSL's [`SslStream`](https://docs.rs/openssl/latest/openssl/ssl/struct.SslStream.html). If you were previously using `SslStream<TcpStream>`, then you'd swap out the inner `TcpStream` to use the `DecryptingPipe`, yielding an `SslStream<DecryptingPipe<TcpStream>>`.
 
 There aren't any super great examples of this right now, but the best places to look would be
-- `brass-aphid-wire/src/bin/decrypting_client.rs`: This file contains a basic TLS client which will print out the full transcript of it's handshake against an arbitrary TLS endpoint.
+- `brass-aphid-wire/src/bin/decrypting_client.rs`: This file contains a basic TLS client which will print out the full transcript of its handshake against an arbitrary TLS endpoint.
 - `brass-aphid-wire/src/testing/openssl_decrypted_transcript.rs`: Sets up a test decrypting with an OpenSSL client and an OpenSSL server.
 - `brass-aphid-wire/src/testing/s2n_decrypted_transcript.rs`: Sets up a test decrypting with an s2n-tls client and an s2n-tls server.
 
