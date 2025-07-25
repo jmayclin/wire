@@ -77,16 +77,6 @@ fn rustls_client_test() -> anyhow::Result<()> {
             tls_stream.conn.send_close_notify();
             tls_stream.write(&[]);
             let closed = tls_stream.read(&mut []);
-
-            // stream.accept().unwrap();
-            // stream.do_handshake().unwrap();
-            // let mut buffer = [0; MESSAGE.len()];
-            // stream.read_exact(&mut buffer);
-            // let shutdown_state = stream.shutdown().unwrap();
-            // if shutdown_state != ShutdownResult::Received {
-            //     let state = stream.shutdown().unwrap();
-            //     assert_eq!(state, ShutdownResult::Received);
-            // }
         });
         let transcript = s
             .spawn(move || {
@@ -106,13 +96,6 @@ fn rustls_client_test() -> anyhow::Result<()> {
                 tls.conn.send_close_notify();
                 tls.write(&[]);
 
-                // stream.connect().unwrap();
-                // stream.write_all(MESSAGE);
-                // let shutdown_state = stream.shutdown().unwrap();
-                // if shutdown_state != ShutdownResult::Received {
-                //     let state = stream.shutdown().unwrap();
-                //     assert_eq!(state, ShutdownResult::Received);
-                // }
                 decrypting_pipe.decrypter.transcript.clone()
             })
             .join()
@@ -120,6 +103,8 @@ fn rustls_client_test() -> anyhow::Result<()> {
         let transcript = transcript.lock().unwrap();
         transcript.clone()
     });
+
+    // std::fs::write("resources/traces/broken-rustls.log", format!("{transcript:#?}"));
 
     let mut messages = transcript.drain(..);
 

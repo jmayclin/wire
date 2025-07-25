@@ -82,6 +82,8 @@ fn openssl_server_test() -> anyhow::Result<()> {
         transcript.clone()
     });
 
+    // std::fs::write("resources/traces/openssl.log", format!("{transcript:#?}"));
+
     let mut messages = transcript.drain(..);
 
     // handshake starts
