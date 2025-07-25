@@ -1,4 +1,5 @@
 /// https://nss-crypto.org/reference/security/nss/legacy/key_log_format/index.html
+#[derive(Debug)]
 pub struct NssLog {
     pub label: String,
     pub client_random: Vec<u8>,

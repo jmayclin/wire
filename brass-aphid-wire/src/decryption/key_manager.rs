@@ -1,3 +1,5 @@
+use rustls::client;
+
 use crate::{
     iana::{self},
     key_log::NssLog,
@@ -99,10 +101,15 @@ impl KeyManager {
         0
     }
 
+    /// This signature is required by OpenSSL
     pub fn parse_key_log_line(&self, line: &[u8]) {
         let line = String::from_utf8(line.to_vec()).unwrap();
-        println!("GOT {line}");
         let key = NssLog::from_log_line(&line).unwrap();
+        self.register_key(key);
+    }
+
+    pub fn register_key(&self, key: NssLog) {
+        tracing::debug!("received key {key:?}");
         self.0
             .lock()
             .unwrap()
@@ -141,5 +148,16 @@ impl KeyManager {
         };
         let space = KeySpace::new(secret, cipher);
         Some(space)
+    }
+}
+
+impl rustls::KeyLog for KeyManager {
+    fn log(&self, label: &str, client_random: &[u8], secret: &[u8]) {
+        let key = NssLog {
+            label: label.to_string(),
+            client_random: client_random.to_vec(),
+            secret: secret.to_vec(),
+        };
+        self.register_key(key)
     }
 }

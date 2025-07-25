@@ -110,6 +110,7 @@ impl<T: std::io::Read> std::io::Read for DecryptingPipe<T> {
         }
 
         let read = self.pipe.read(buf)?;
+        tracing::trace!("read {read} bytes");
 
         let peer = self.identity.unwrap().peer();
 
@@ -129,6 +130,7 @@ impl<T: std::io::Write> std::io::Write for DecryptingPipe<T> {
         }
 
         let written = self.pipe.write(buf)?;
+        tracing::trace!("wrote {written} bytes");
 
         let identity = self.identity.unwrap();
 

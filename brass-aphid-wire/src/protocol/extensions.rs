@@ -284,6 +284,31 @@ pub struct PresharedKeyClientHello {
     pub binders: PrefixedList<PskBinderEntry, u16>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[repr(u8)]
+enum CertificateStatusType {
+    Ocsp = 1
+}
+impl_byte_value!(CertificateStatusType, u8);
+
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+struct OcspStatusRequest {
+    responder_id_list: PrefixedList<ResponderId, u16>,
+    extensions: PrefixedBlob<u16>
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+struct ResponderId {
+    id: PrefixedBlob<u16>
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc6066.html#section-8
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct CertificateStatus {
+    status_type: CertificateStatusType,
+    request: OcspStatusRequest,
+}
+
 /// Defined in https://datatracker.ietf.org/doc/html/rfc7366#section-2
 /// Sent in ClientHello or ServerHello in TLS 1.2(ish?)
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -306,6 +331,7 @@ pub enum ClientHelloExtensionData {
     RecordSizeLimit(RecordSizeLimit),
     Padding(Padding),
     EncryptThenMac(EncryptThenMac),
+    StatusRequest(CertificateStatus),
     Unknown(Vec<u8>),
 }
 
@@ -324,6 +350,8 @@ impl ClientHelloExtension {
 
 // dyn DecodeValue, EncodeValue, Debug
 
+// TODO: would be run to look at the truncated hmac extension (who thought that was a good idea 😭)
+
 impl DecodeValue for ClientHelloExtension {
     fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
         let (extension, buffer) = Extension::decode_from(buffer)?;
@@ -337,7 +365,10 @@ impl DecodeValue for ClientHelloExtension {
                 ClientHelloExtensionData::PreSharedKey(value)
             }
             ExtensionType::MaxFragmentLength => todo!(),
-            ExtensionType::StatusRequest => todo!(),
+            ExtensionType::StatusRequest => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::StatusRequest(value)
+            },
             ExtensionType::SupportedGroups => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SupportedGroups(value)
@@ -451,6 +482,7 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::RecordSizeLimit(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::Padding(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EncryptThenMac(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::StatusRequest(extension) => extension.encode_to_vec(),
         }?;
         let length = extension_data.len() as u16;
         buffer.encode_value(&length)?;

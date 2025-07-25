@@ -343,7 +343,7 @@ impl StreamDecrypter {
         for record in records.drain(..) {
             let record_buffer = record.as_slice();
             let (record_header, mut record_buffer) = RecordHeader::decode_from(record_buffer)?;
-            println!("{record_header:#?}");
+            tracing::debug!("{mode:?} record {record_header:#?}");
 
             // read all of the messages in the buffer
             while !record_buffer.is_empty() {
@@ -440,8 +440,17 @@ impl StreamDecrypter {
 
                         println!("{} bytes of ApplicationData", record_buffer.len());
                         let space = match mode {
-                            Mode::Client => self.current_client_space.as_mut().unwrap(),
-                            Mode::Server => self.current_server_space.as_mut().unwrap(),
+                            Mode::Client => self.current_client_space.as_mut(),
+                            Mode::Server => self.current_server_space.as_mut(),
+                        };
+                        let space = match space {
+                            Some(s) => s,
+                            None => {
+                                println!("skip decrypt skip ...");
+                                // TODO: This code is awful. Somehow when I added this skip things continued to work
+                                // shocking.
+                                return Ok(())
+                            }
                         };
                         // let space = self.current_space.as_mut().unwrap();
                         let mut plaintext = space.decrypt_record(&record_header, record_buffer);
