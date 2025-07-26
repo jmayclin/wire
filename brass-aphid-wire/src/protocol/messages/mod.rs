@@ -345,7 +345,7 @@ impl DecodeValueWithContext for Finished {
         mut buffer: &[u8],
         context: Self::Context,
     ) -> std::io::Result<(Self, &[u8])> {
-        let hash_size = context.hash().byte_value();
+        let hash_size = context.hash().digest_size();
         let mut verify_data = vec![0; hash_size as usize];
         buffer.read_exact(&mut verify_data)?;
 

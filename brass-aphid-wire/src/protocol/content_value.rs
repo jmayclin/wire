@@ -28,6 +28,15 @@ impl ContentValue {
             ContentValue::ChangeCipherSpec(_) => ContentType::ChangeCipherSpec,
         }
     }
+
+    #[cfg(test)]
+    pub fn as_handshake(&self) -> &HandshakeMessageValue {
+        if let ContentValue::Handshake(hm) = self {
+            hm
+        } else {
+            panic!("content type was {:?}, not handshake", self.content_type());
+        }
+    }
 }
 
 // TODO: I am inconsistent about when I specify "Tls13" and when it's just the plain
@@ -47,6 +56,21 @@ pub enum HandshakeMessageValue {
 }
 
 impl HandshakeMessageValue {
+    pub fn handshake_type(&self) -> HandshakeType {
+        match self {
+            HandshakeMessageValue::ClientHello(_) => HandshakeType::ClientHello,
+            HandshakeMessageValue::ServerHello(_) => HandshakeType::ServerHello,
+            HandshakeMessageValue::EncryptedExtensions(_) => HandshakeType::EncryptedExtensions,
+            HandshakeMessageValue::CertificateTls13(_) => HandshakeType::Certificate,
+            HandshakeMessageValue::CertificateTls12ish(_) => HandshakeType::Certificate,
+            HandshakeMessageValue::ServerKeyExchange(_) => HandshakeType::ServerKeyExchange,
+            HandshakeMessageValue::CertVerifyTls13(_) => HandshakeType::CertificateVerify,
+            HandshakeMessageValue::CertificateRequestTls13(_) => HandshakeType::CertificateRequest,
+            HandshakeMessageValue::NewSessionTicketTls13(_) => HandshakeType::NewSessionTicket,
+            HandshakeMessageValue::Finished(_) => HandshakeType::Finished,
+        }
+    }
+
     // None when the plain "decode" implementation is used
     // Some when the decode_with_context impl is used
     fn base_decode(
@@ -55,6 +79,7 @@ impl HandshakeMessageValue {
         cipher: Option<iana::Cipher>,
     ) -> std::io::Result<(Self, &[u8])> {
         let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
+        tracing::trace!("handshake message header: {message_header:?}");
         let (value, buffer) = match message_header.handshake_type {
             HandshakeType::HelloRequest => {
                 todo!("{:?} not implemented", message_header.handshake_type);

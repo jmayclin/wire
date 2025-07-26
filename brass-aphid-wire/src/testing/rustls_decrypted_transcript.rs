@@ -14,9 +14,10 @@ use rustls::{
 };
 
 use crate::{
-    decryption::{key_manager::KeyManager, DecryptingPipe},
-    protocol::content_value::{ContentValue, HandshakeMessageValue},
-    stream_decrypter::Mode,
+    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
+    protocol::{
+        content_value::{ContentValue, HandshakeMessageValue}, ChangeCipherSpec, ContentType, HandshakeType
+    },
     testing::utilities::{get_cert_path, PemType, SigType},
 };
 
@@ -24,10 +25,6 @@ struct NoVerify {}
 
 #[test]
 fn rustls_client_test() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .init();
-
     let key_manager = KeyManager::new();
     let key_manager_handle = key_manager.clone();
 
@@ -111,56 +108,73 @@ fn rustls_client_test() -> anyhow::Result<()> {
     // handshake starts
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Client);
-    assert!(matches!(
-        message,
-        ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))
-    ));
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::ClientHello
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert!(matches!(
-        message,
-        ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
-    ));
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::ServerHello
+    );
 
-    // MISSING ENCRYPTED EXTENSION, CERTIFICATE, CERTIFICATE VERIFY?
-    // let (sender, message) = messages.next().unwrap();
-    // assert_eq!(sender, Mode::Server);
-    // assert!(matches!(
-    //     message,
-    //     ContentValue::Handshake(HandshakeMessageValue::EncryptedExtensions(_))
-    // ));
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Client);
+    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
 
     // encrypted data
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Client);
-    assert!(matches!(
-        message,
-        ContentValue::Handshake(HandshakeMessageValue::Finished(_))
-    ));
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::Finished
+    );
 
-    // encrypted data
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert!(matches!(
-        message,
-        ContentValue::Handshake(HandshakeMessageValue::NewSessionTicketTls13(_))
-    ));
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert!(matches!(message, ContentValue::ApplicationData(_)));
+    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert!(matches!(message, ContentValue::Alert(_)));
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::EncryptedExtensions);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::Certificate);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::CertificateVerify);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::Finished);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.content_type(), ContentType::ApplicationData);
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert_eq!(message.content_type(), ContentType::Alert);
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Client);
-    assert!(matches!(message, ContentValue::Alert(_)));
+    assert_eq!(message.content_type(), ContentType::Alert);
 
     assert!(messages.next().is_none());
-    assert!(false);
+    // assert!(false);
 
     Ok(())
 }

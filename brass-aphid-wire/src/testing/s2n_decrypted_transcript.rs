@@ -1,14 +1,16 @@
 use s2n_tls::testing::TestPair;
 
 use crate::{
-    decryption::{key_manager::KeyManager, DecryptingPipe},
-    protocol::content_value::{ContentValue, HandshakeMessageValue},
-    stream_decrypter::Mode,
+    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
+    protocol::{content_value::{ContentValue, HandshakeMessageValue}, ChangeCipherSpec},
     testing::utilities::{s2n_server_config, SigType},
 };
 
 #[test]
 fn s2n_server_test() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
     let key_manager = KeyManager::new();
 
     let client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
@@ -105,6 +107,7 @@ fn s2n_client_test() -> anyhow::Result<()> {
 }
 
 fn assert_s2n_decryption_correct(mut messages: Vec<(Mode, ContentValue)>) {
+    println!("messages: {messages:#?}");
     let mut messages = messages.drain(..);
 
     // handshake starts
@@ -120,6 +123,13 @@ fn assert_s2n_decryption_correct(mut messages: Vec<(Mode, ContentValue)>) {
     assert!(matches!(
         message,
         ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
+    ));
+
+    let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Server);
+    assert!(matches!(
+        message,
+        ContentValue::ChangeCipherSpec(ChangeCipherSpec::ChangeCipherSpec)
     ));
 
     // encrypted data
@@ -151,7 +161,19 @@ fn assert_s2n_decryption_correct(mut messages: Vec<(Mode, ContentValue)>) {
         ContentValue::Handshake(HandshakeMessageValue::Finished(_))
     ));
 
+    // TODO: Idk about the CCS being sent before the finished message. That seems
+    // wrong. Is the finished message encrypted under the actual traffic keys?
+    // https://www.rfc-editor.org/rfc/rfc8446#appendix-A.2
+    // According to this it is not 🤔
     let (sender, message) = messages.next().unwrap();
+    assert_eq!(sender, Mode::Client);
+    assert!(matches!(
+        message,
+        ContentValue::ChangeCipherSpec(ChangeCipherSpec::ChangeCipherSpec)
+    ));
+
+    let (sender, message) = messages.next().unwrap();
+    println!("messages was actually {message:?}");
     assert_eq!(sender, Mode::Client);
     assert!(matches!(
         message,

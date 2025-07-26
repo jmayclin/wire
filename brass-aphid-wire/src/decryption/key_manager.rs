@@ -1,9 +1,7 @@
 use rustls::client;
 
 use crate::{
-    iana::{self},
-    key_log::NssLog,
-    stream_decrypter::{KeySpace, Mode},
+    decryption::{key_space::KeySpace, Mode}, iana::{self}, key_log::NssLog
 };
 use std::{
     collections::HashMap,
@@ -121,7 +119,7 @@ impl KeyManager {
 
     /// the key used for initial handshake messages in TLS 1.3
     pub fn handshake_space(
-        &mut self,
+        &self,
         mode: Mode,
         client_random: &[u8],
         cipher: iana::Cipher,
@@ -136,7 +134,7 @@ impl KeyManager {
     }
 
     pub fn application_space(
-        &mut self,
+        &self,
         mode: Mode,
         client_random: &[u8],
         cipher: iana::Cipher,

@@ -1,4 +1,4 @@
-use std::ffi::c_void;
+use std::{ffi::c_void, io::ErrorKind};
 
 use crate::{
     decryption::{
@@ -6,13 +6,33 @@ use crate::{
         s2n_tls_intercept::{
             generic_recv_cb, generic_send_cb, ArchaicCPipe, PeerIntoS2ntlsInsides,
         },
+        stream_decrypter::StreamDecrypter,
     },
-    stream_decrypter::{Mode, StreamDecrypter},
 };
 
 pub mod key_manager;
+pub mod key_space;
 pub mod s2n_tls_intercept;
+pub mod stream_decrypter;
+pub mod tls_stream;
 pub mod transcript;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    Client,
+    Server,
+}
+
+impl Mode {
+    pub fn peer(&self) -> Mode {
+        match self {
+            Mode::Client => Mode::Server,
+            Mode::Server => Mode::Client,
+        }
+    }
+}
+
+
 
 // basic test -> 1 message, 1 record,
 // harder test -> 2 messages, 1 record,
@@ -116,7 +136,12 @@ impl<T: std::io::Read> std::io::Read for DecryptingPipe<T> {
 
         self.decrypter.record_tx(&buf[..read], peer);
         self.decrypter.assemble_records(peer);
-        self.decrypter.decrypt_records(peer).unwrap();
+        //self.decrypter.decrypt_records(peer).unwrap();
+        if let Err(e) = self.decrypter.decrypt_records(peer) {
+            if e.kind() != ErrorKind::UnexpectedEof {
+                panic!("unexpected error: {e}");
+            }
+        }
 
         Ok(read)
     }
@@ -136,9 +161,11 @@ impl<T: std::io::Write> std::io::Write for DecryptingPipe<T> {
 
         self.decrypter.record_tx(&buf[..written], identity);
         self.decrypter.assemble_records(self.identity.unwrap());
-        self.decrypter
-            .decrypt_records(self.identity.unwrap())
-            .unwrap();
+        if let Err(e) = self.decrypter.decrypt_records(self.identity.unwrap()) {
+            if e.kind() != ErrorKind::UnexpectedEof {
+                panic!("unexpected error: {e}");
+            }
+        }
 
         Ok(written)
     }
