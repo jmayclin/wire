@@ -1,6 +1,6 @@
 use crate::{
-    codec::{DecodeValue, DecodeValueWithContext, EncodeValue},
-    decryption::key_manager::KeyManager,
+    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext, EncodeValue},
+    decryption::{key_manager::KeyManager, key_space::KeySpace},
     iana::{self, Protocol},
     protocol::{
         content_value::{ContentValue, HandshakeMessageValue},
@@ -12,9 +12,12 @@ use aws_lc_rs::{
     hkdf::{self},
 };
 use std::{
+    collections::VecDeque,
     fmt::Debug,
+    io::ErrorKind,
     sync::{Arc, Mutex},
 };
+use tracing::span::Record;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -31,161 +34,7 @@ impl Mode {
     }
 }
 
-impl iana::Cipher {
-    fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm {
-        match self.description {
-            "TLS_AES_128_GCM_SHA256" => &aead::AES_128_GCM,
-            "TLS_AES_256_GCM_SHA384" => &aead::AES_256_GCM,
-            "TLS_CHACHA20_POLY1305_SHA256" => &aead::CHACHA20_POLY1305,
-            _ => panic!("one of us did something stupid. Probably me."),
-        }
-    }
 
-    fn hkdf(&self) -> aws_lc_rs::hkdf::Algorithm {
-        match self.description {
-            "TLS_AES_128_GCM_SHA256" => hkdf::HKDF_SHA256,
-            "TLS_AES_256_GCM_SHA384" => hkdf::HKDF_SHA384,
-            "TLS_CHACHA20_POLY1305_SHA256" => hkdf::HKDF_SHA256,
-            _ => panic!("one of us did something stupid. Probably me."),
-        }
-    }
-}
-
-struct UsizeContainer(usize);
-
-impl UsizeContainer {
-    fn new(num: usize) -> Self {
-        UsizeContainer(num)
-    }
-}
-
-// they have unfortunately made me too angry to put up with their API
-// I am done asking nicely, and will simply transmute it into the shape
-// I wish for, and deal with the consequences later.
-impl hkdf::KeyType for UsizeContainer {
-    fn len(&self) -> usize {
-        self.0
-    }
-}
-
-fn hkdf_expand_label<T: hkdf::KeyType>(
-    secret: &[u8],
-    label: &[u8],
-    context: &[u8],
-    key_type: T,
-    hkdf: hkdf::Algorithm,
-) -> Vec<u8> {
-    let prk = hkdf::Prk::new_less_safe(hkdf, secret);
-
-    let output_length_bytes = (key_type.len() as u16).to_be_bytes();
-    let label = {
-        let mut label_builder = Vec::new();
-        label_builder.extend_from_slice(b"tls13 ");
-        label_builder.extend_from_slice(label);
-        label_builder
-    };
-    let label_bytes = label.len() as u8;
-
-    let context_bytes = context.len() as u8;
-    let label = [
-        output_length_bytes.as_slice(),
-        &[label_bytes],
-        &label,
-        &[context_bytes],
-        context,
-    ];
-
-    let mut key = vec![0; key_type.len()];
-    let out = prk.expand(&label, key_type).unwrap();
-    out.fill(&mut key).unwrap();
-    key
-}
-
-/// KeySpace represents the decryption context of some keys.
-///
-/// E.g. Handshake Space or Traffic Space.
-#[derive(Debug)]
-pub struct KeySpace {
-    pub cipher: iana::Cipher,
-    pub secret: Vec<u8>,
-    pub record_count: u64,
-}
-
-impl KeySpace {
-    pub fn new(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
-        // https://www.rfc-editor.org/rfc/rfc8446#section-7.3
-        // [sender]_write_key = HKDF-Expand-Label(Secret, "key", "", key_length)
-        // [sender]_write_iv  = HKDF-Expand-Label(Secret, "iv", "", iv_length)
-
-        Self {
-            cipher,
-            secret,
-            record_count: 0,
-        }
-    }
-
-    fn traffic_key(&self) -> std::io::Result<(Vec<u8>, Vec<u8>)> {
-        let secret = &self.secret;
-        // Determine the hash algorithm, key length, and IV length based on the cipher suite
-        let aead = self.cipher.aead();
-
-        let key = hkdf_expand_label(
-            secret,
-            b"key",
-            b"",
-            UsizeContainer::new(aead.key_len()),
-            self.cipher.hkdf(),
-        );
-        let iv = hkdf_expand_label(
-            secret,
-            b"iv",
-            b"",
-            UsizeContainer::new(aead.nonce_len()),
-            self.cipher.hkdf(),
-        );
-
-        Ok((key, iv))
-    }
-
-    /// * `record`: the encrypted record, exclusive of the header
-    /// * `sender`: the party who transmitted the record
-    fn decrypt_record(&mut self, header: &RecordHeader, record: &[u8]) -> Vec<u8> {
-        let (key, iv) = self.traffic_key().unwrap();
-
-        let nonce = Self::calculate_nonce(iv, self.record_count);
-        self.record_count += 1;
-
-        let unbound_key = aws_lc_rs::aead::UnboundKey::new(self.cipher.aead(), &key).unwrap();
-        let less_safe_key = aws_lc_rs::aead::LessSafeKey::new(unbound_key);
-
-        // Create a buffer that contains ciphertext + tag for in-place decryption
-        let mut output = record.to_vec();
-
-        // Decrypt the record
-        let nonce_obj = aws_lc_rs::aead::Nonce::try_assume_unique_for_key(&nonce).unwrap();
-
-        let aad = header.encode_to_vec().unwrap();
-
-        let plaintext = less_safe_key
-            .open_in_place(nonce_obj, aws_lc_rs::aead::Aad::from(aad), &mut output)
-            .unwrap();
-        plaintext.to_vec()
-    }
-
-    /// XOR the IV with the record count
-    fn calculate_nonce(iv: Vec<u8>, record_count: u64) -> Vec<u8> {
-        let mut nonce = iv.clone();
-        let record_count = record_count.to_be_bytes();
-        let mut bytes = vec![0; nonce.len() - record_count.len()];
-        bytes.extend_from_slice(&record_count);
-
-        for i in 0..nonce.len() {
-            nonce[i] ^= bytes[i];
-        }
-
-        nonce
-    }
-}
 
 /// The StreamDecrypter is responsible for actually decrypting the TLS traffic
 ///
@@ -449,7 +298,7 @@ impl StreamDecrypter {
                                 println!("skip decrypt skip ...");
                                 // TODO: This code is awful. Somehow when I added this skip things continued to work
                                 // shocking.
-                                return Ok(())
+                                return Ok(());
                             }
                         };
                         // let space = self.current_space.as_mut().unwrap();

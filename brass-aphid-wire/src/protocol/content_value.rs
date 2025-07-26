@@ -55,6 +55,7 @@ impl HandshakeMessageValue {
         cipher: Option<iana::Cipher>,
     ) -> std::io::Result<(Self, &[u8])> {
         let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
+        tracing::trace!("handshake message header: {message_header:?}");
         let (value, buffer) = match message_header.handshake_type {
             HandshakeType::HelloRequest => {
                 todo!("{:?} not implemented", message_header.handshake_type);

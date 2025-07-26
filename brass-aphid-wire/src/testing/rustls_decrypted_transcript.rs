@@ -160,7 +160,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
     assert!(matches!(message, ContentValue::Alert(_)));
 
     assert!(messages.next().is_none());
-    assert!(false);
+    // assert!(false);
 
     Ok(())
 }

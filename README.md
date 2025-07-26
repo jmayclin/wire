@@ -1,6 +1,11 @@
 # omg💅heyyy✨bestie💖lets👪do💌tls🔒
 
-`brass-aphid-wire` is a crate to simplify the parsing of TLS records.
+`brass-aphid-wire` is a crate to simplify the parsing of TLS records. It also offers a "runtime decrypter" which allows users to examine a decrypted TLS conversation as it is happening. 
+
+The following are traces from 
+- [s2n-tls trace](brass-aphid-wire/resources/traces/s2n-tls.log)
+- [openssl trace](brass-aphid-wire/resources/traces/openssl.log)
+- [rustls trace (this is currently broken)](brass-aphid-wire/resources/traces/broken-rustls.log)
 
 > [!CAUTION]
 > This is very much "in-progress", and is not at all suitable for production. Only TLS 1.3 is supported with the 3 main AEAD ciphers. Generally the library will simply explode/panic if you go off this narrow, happy path. I do intend to eventually make this a production-suitable library, but for now it's best restricted to fiddling about.
