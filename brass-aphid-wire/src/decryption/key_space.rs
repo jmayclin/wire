@@ -2,7 +2,6 @@ use aws_lc_rs::{aead, hkdf};
 
 use crate::{codec::{DecodeValue, EncodeValue}, iana, protocol::{ContentType, RecordHeader}};
 
-
 impl iana::Cipher {
     fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm {
         match self.description {

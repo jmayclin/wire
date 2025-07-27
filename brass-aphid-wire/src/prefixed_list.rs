@@ -1,4 +1,4 @@
-use std::{fmt::Debug, io::ErrorKind};
+use std::{any::type_name, fmt::Debug, io::ErrorKind};
 
 use anyhow::anyhow;
 
@@ -128,7 +128,7 @@ where
         if current_buffer_size < length_usize {
             return Err(std::io::Error::new(
                 ErrorKind::UnexpectedEof,
-                "not enough data available".to_owned(),
+                format!("not enough data available for PrefixedList of {} with {} length", type_name::<T>(), type_name::<L>()),
             ));
         }
         let target_buffer_size = current_buffer_size - length_usize;

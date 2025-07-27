@@ -1,4 +1,3 @@
-use rustls::client;
 
 use crate::{
     decryption::{key_space::KeySpace, Mode}, iana::{self}, key_log::NssLog

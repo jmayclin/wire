@@ -1,24 +1,14 @@
 use crate::{
-    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext, EncodeValue},
-    decryption::{key_manager::KeyManager, key_space::{KeySpace, SecretSpace}, stream_decrypter::ConversationState, Mode},
-    iana::{self, Protocol},
+    codec::{DecodeValue, DecodeValueWithContext},
+    decryption::{
+        key_manager::KeyManager, key_space::SecretSpace, stream_decrypter::ConversationState, Mode,
+    },
     protocol::{
         content_value::{ContentValue, HandshakeMessageValue},
         Alert, ChangeCipherSpec, ContentType, RecordHeader,
     },
 };
-use aws_lc_rs::{
-    aead,
-    hkdf::{self},
-};
-use std::{
-    collections::VecDeque,
-    fmt::Debug,
-    io::ErrorKind,
-    sync::{Arc, Mutex},
-};
-
-
+use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
 
 /// A TlsStream is generally responsible for handling the framing and decrypting
 /// of the TLS Record protocol.
@@ -87,8 +77,21 @@ impl TlsStream {
             needs_next_key_space: false,
         }
     }
+
+    /// Add bytes to a TLS stream.
+    ///
+    /// In the case of a DecryptingPipe, this is the method called by the Read &
+    /// Write IO methods.
+    ///
+    /// This method will not do any decryption, but will try and assemble existing
+    /// data into complete records.
     pub fn feed_bytes(&mut self, data: &[u8]) -> std::io::Result<()> {
         // first buffer into byte buffer.
+        tracing::info!(
+            "feeding {:?} bytes, record buffer currently {}",
+            data.len(),
+            self.record_buffer.len()
+        );
         self.byte_buffer.extend_from_slice(data);
 
         // get all of the records
@@ -101,9 +104,12 @@ impl TlsStream {
             self.record_buffer.push_back(record);
         }
 
+        tracing::info!("record buffer now {}", self.record_buffer.len());
+
         Ok(())
     }
 
+    /// Attempt to decrypt available bytes.
     pub fn digest_bytes(
         &mut self,
         state: &mut ConversationState,
@@ -136,7 +142,7 @@ impl TlsStream {
                             state.client_random.as_ref().unwrap(),
                             state.selected_cipher.unwrap(),
                         )
-                        .map(|space| SecretSpace::Handshake(space)),
+                        .map(SecretSpace::Handshake),
                     SecretSpace::Handshake(_) => key_manger
                         .application_space(
                             self.sender,
@@ -145,10 +151,10 @@ impl TlsStream {
                         )
                         .map(|space| SecretSpace::Application(space, 0)),
                     SecretSpace::Application(_key_space, _key_epoch) => {
-                        todo!("support for key updates is not implemented");
+                        todo!("support for key updates is not (yet) implemented");
                     }
                 };
-                tracing::info!("getting next space for {:?} after {:?}", self.sender, self.key_space);
+
                 match next_space {
                     Some(space) => {
                         self.key_space = space;
@@ -164,8 +170,6 @@ impl TlsStream {
                 }
             }
 
-            tracing::debug!("deframing the record");
-
             // if there are records, deframe. otherwise return
             let (content_type, record_payload) = match self.record_buffer.pop_front() {
                 Some(record) => self.key_space.deframe_record(&record)?,
@@ -174,29 +178,38 @@ impl TlsStream {
 
             if self.plaintext_content_stream.is_empty() {
                 self.plaintext_content_type = content_type;
-            } else {
-                if content_type != self.plaintext_content_type {
+            } else if content_type != self.plaintext_content_type {
                 return Err(std::io::Error::new(
                     ErrorKind::InvalidData,
                     "unable to fully parse plaintext stream, malformed message",
                 ));
-                }
             }
 
             // add the record into the plaintext stream
-            self.plaintext_content_stream
-                .extend(record_payload.into_iter());
+            self.plaintext_content_stream.extend(record_payload);
 
-            tracing::trace!("plaintext stream length: {:?}", self.plaintext_content_stream.len());
+            tracing::trace!(
+                "plaintext stream length: {:?}",
+                self.plaintext_content_stream.len()
+            );
 
-            while let Some(value) = Self::plaintext_stream_message(
-                self.plaintext_content_type,
-                &mut self.plaintext_content_stream,
-                state,
-            ).map_err(|e| {
-                tracing::error!("{e}");
-                e
-            })? {
+            loop {
+                let message = Self::plaintext_stream_message(
+                    self.plaintext_content_type,
+                    &mut self.plaintext_content_stream,
+                    state,
+                );
+                let value = match message {
+                    // we got a value, yay!
+                    Ok(Some(content)) => content,
+                    // we didn't have enough data for a value, but maybe if we shove
+                    // more records onto the stream then we will.
+                    Ok(None) => break,
+                    Err(e) if e.kind() == ErrorKind::UnexpectedEof => break,
+                    // something went wrong
+                    Err(e) => return Err(e),
+                };
+
                 tracing::trace!("from plaintext stream: {value:?}");
                 // TODO: handle hello retries. Maybe a method that the TlsStream
                 // can call to reset the key space? Prevent the "next key space"
@@ -232,12 +245,22 @@ impl TlsStream {
                 if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(s)) = &value {
                     state.selected_cipher = Some(s.cipher_suite);
                     state.selected_protocol = Some(s.selected_version()?);
+                    tracing::info!("setting cipher and selected version: {state:?}");
                 }
 
                 content.push(value);
             }
-
-
+            // while let Some(value) = Self::plaintext_stream_message(
+            //     self.plaintext_content_type,
+            //     &mut self.plaintext_content_stream,
+            //     state,
+            // )
+            // .map_err(|e| {
+            //     tracing::error!("{e}");
+            //     e
+            // })? {
+                
+            // }
         }
     }
 
@@ -274,13 +297,16 @@ impl TlsStream {
         let (buffer, empty) = stream.as_slices();
         assert!(empty.is_empty());
 
-        // TODO: neater handling. 
+        // TODO: neater handling.
         // Can't rely on EOF because some things can be zero sized
         if buffer.is_empty() {
             return Ok(None);
         }
 
-        tracing::info!("plaintext stream length before message pull of {content_type:?}: {:?}", stream.len());
+        tracing::info!(
+            "plaintext stream length before message pull of {content_type:?}: {:?}",
+            stream.len()
+        );
         let (value, buffer) = match content_type {
             ContentType::Invalid => panic!("invalid"),
             ContentType::ChangeCipherSpec => {
@@ -317,7 +343,10 @@ impl TlsStream {
             stream.pop_front();
         }
 
-        tracing::info!("plaintext stream length after message pull: {:?}", stream.len());
+        tracing::info!(
+            "plaintext stream length after message pull: {:?}",
+            stream.len()
+        );
 
         Ok(Some(value))
     }

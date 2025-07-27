@@ -1,22 +1,17 @@
 use std::{
     io::{Read, Write},
-    net::{TcpListener, TcpStream},
+    net::TcpListener,
     sync::Arc,
 };
 
-use openssl::ssl::{
-    ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode,
-};
 use rustls::{
-    client::danger::ServerCertVerifier,
-    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
-    server, RootCertStore,
+    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer}, RootCertStore,
 };
 
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
     protocol::{
-        content_value::{ContentValue, HandshakeMessageValue}, ChangeCipherSpec, ContentType, HandshakeType
+        ContentType, HandshakeType
     },
     testing::utilities::{get_cert_path, PemType, SigType},
 };
@@ -52,10 +47,10 @@ fn rustls_client_test() -> anyhow::Result<()> {
             .map(|cert| cert.unwrap())
             .collect();
         let private_key = PrivateKeyDer::from_pem_file(private_key_file).unwrap();
-        let config = rustls::ServerConfig::builder()
+        
+        rustls::ServerConfig::builder()
             .with_no_client_auth()
-            .with_single_cert(certs, private_key)?;
-        config
+            .with_single_cert(certs, private_key)?
     };
     let mut server = rustls::ServerConnection::new(Arc::new(server_config))?;
 
@@ -77,7 +72,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
         });
         let transcript = s
             .spawn(move || {
-                let mut client_stream = std::net::TcpStream::connect(server_addr).unwrap();
+                let client_stream = std::net::TcpStream::connect(server_addr).unwrap();
 
                 let server_name = "localhost".try_into().unwrap();
                 let mut conn =

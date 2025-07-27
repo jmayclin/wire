@@ -9,4 +9,7 @@ mod openssl_decrypted_transcript;
 mod s2n_decrypted_transcript;
 mod s2n_encrypted_transcripts;
 mod rustls_decrypted_transcript;
+mod stutter;
+mod key_update;
+mod hello_retry;
 pub mod utilities;

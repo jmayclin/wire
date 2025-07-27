@@ -1,6 +1,33 @@
-use crate::decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides};
+use crate::{decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides}, protocol::content_value::ContentValue};
 use s2n_tls::{enums::Mode, testing::TestPair};
-use std::{cell::RefCell, ffi::c_void, io::Write, pin::Pin, sync::Arc};
+use std::{cell::RefCell, ffi::c_void, io::Write, pin::Pin, sync::{Arc, Mutex}};
+
+struct Transcript {
+    /// a list of the record sizes sent by each peer
+    pub record_transcript:Mutex<Vec<(Mode, usize)>>,
+
+    /// a list of the content sent by each peer
+    pub content_transcript: Mutex<Vec<(Mode, ContentValue)>>,
+}
+
+impl Transcript {
+    // record_record hurts my brain
+    pub fn record_record(&self, sender: Mode, size: usize) {
+        self.record_transcript.lock().unwrap().push((sender, size));
+    }
+
+    pub fn record_content(&self, sender: Mode, content: ContentValue) {
+        self.content_transcript.lock().unwrap().push((sender, content));
+    }
+
+    pub fn records(&self) -> Vec<(Mode, usize)> {
+        self.record_transcript.lock().unwrap().clone()
+    }
+
+    pub fn content(&self) -> Vec<(Mode, usize)> {
+        self.record_transcript.lock().unwrap().clone()
+    }
+}
 
 use crate::decryption::s2n_tls_intercept::InterceptedSendCallback;
 pub trait TestPairExtension {
