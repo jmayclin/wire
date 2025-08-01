@@ -144,15 +144,15 @@ impl TlsStream {
                         )
                         .map(SecretSpace::Handshake),
                     SecretSpace::Handshake(_) => key_manger
-                        .application_space(
+                        .first_application_space(
                             self.sender,
                             state.client_random.as_ref().unwrap(),
                             state.selected_cipher.unwrap(),
                         )
                         .map(|space| SecretSpace::Application(space, 0)),
-                    SecretSpace::Application(_key_space, _key_epoch) => {
-                        todo!("support for key updates is not (yet) implemented");
-                    }
+                    SecretSpace::Application(key_space, current_key_epoch) => Some(
+                        SecretSpace::Application(key_space.key_update(), *current_key_epoch + 1),
+                    ),
                 };
 
                 match next_space {
@@ -161,6 +161,8 @@ impl TlsStream {
                         self.needs_next_key_space = false;
                     }
                     None => {
+                        // give up on decrypting now, and hope that the next time
+                        // digest bytes is called we will have the keys that we need
                         tracing::warn!(
                             "Needed next space after {:?}, but it was unavailable",
                             self.key_space
@@ -176,6 +178,11 @@ impl TlsStream {
                 None => return Ok(content),
             };
 
+            // make sure that the record is the right type.
+            //
+            // If we are switching content types, then we should have received a
+            // full message (and been able to decrypt it) so the stream should be
+            // empty.
             if self.plaintext_content_stream.is_empty() {
                 self.plaintext_content_type = content_type;
             } else if content_type != self.plaintext_content_type {
@@ -238,6 +245,16 @@ impl TlsStream {
                     self.needs_next_key_space = true;
                 }
 
+                // server/client has updated their keys
+                // If the peer update was requested, then we will update when the
+                // peer sends their own KeyUpdate message.
+                if matches!(
+                    value,
+                    ContentValue::Handshake(HandshakeMessageValue::KeyUpdate(_))
+                ) {
+                    self.needs_next_key_space = true;
+                }
+
                 // update the connection state
                 if let ContentValue::Handshake(HandshakeMessageValue::ClientHello(s)) = &value {
                     state.client_random = Some(s.random.to_vec());
@@ -259,7 +276,7 @@ impl TlsStream {
             //     tracing::error!("{e}");
             //     e
             // })? {
-                
+
             // }
         }
     }

@@ -1,6 +1,10 @@
 use aws_lc_rs::{aead, hkdf};
 
-use crate::{codec::{DecodeValue, EncodeValue}, iana, protocol::{ContentType, RecordHeader}};
+use crate::{
+    codec::{DecodeValue, EncodeValue},
+    iana,
+    protocol::{ContentType, RecordHeader},
+};
 
 impl iana::Cipher {
     fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm {
@@ -80,10 +84,12 @@ pub struct KeySpace {
     pub cipher: iana::Cipher,
     pub secret: Vec<u8>,
     pub record_count: u64,
+    /// Defined for application traffic
+    pub key_epoch: Option<usize>,
 }
 
 impl KeySpace {
-    pub fn new(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
+    pub fn handshake_traffic_secret(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
         // https://www.rfc-editor.org/rfc/rfc8446#section-7.3
         // [sender]_write_key = HKDF-Expand-Label(Secret, "key", "", key_length)
         // [sender]_write_iv  = HKDF-Expand-Label(Secret, "iv", "", iv_length)
@@ -92,9 +98,49 @@ impl KeySpace {
             cipher,
             secret,
             record_count: 0,
+            key_epoch: None,
         }
     }
 
+    pub fn first_traffic_secret(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
+        // https://www.rfc-editor.org/rfc/rfc8446#section-7.3
+        // [sender]_write_key = HKDF-Expand-Label(Secret, "key", "", key_length)
+        // [sender]_write_iv  = HKDF-Expand-Label(Secret, "iv", "", iv_length)
+
+        Self {
+            cipher,
+            secret,
+            record_count: 0,
+            key_epoch: Some(0),
+        }
+    }
+
+    /// Return a new key space following a key update
+    ///
+    /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-7.2
+    pub fn key_update(&self) -> Self {
+        let new_secret = hkdf_expand_label(
+            &self.secret,
+            b"traffic upd",
+            b"",
+            UsizeContainer::new(
+                self.cipher
+                    .hkdf()
+                    .hmac_algorithm()
+                    .digest_algorithm()
+                    .output_len(),
+            ),
+            self.cipher.hkdf(),
+        );
+        Self {
+            cipher: self.cipher,
+            secret: new_secret,
+            record_count: 0,
+            key_epoch: self.key_epoch.map(|epoch| epoch + 1),
+        }
+    }
+
+    /// Return the actual key and IV which will be used the the symmetric cipher
     pub fn traffic_key(&self) -> std::io::Result<(Vec<u8>, Vec<u8>)> {
         let secret = &self.secret;
         // Determine the hash algorithm, key length, and IV length based on the cipher suite
@@ -158,8 +204,6 @@ impl KeySpace {
     }
 }
 
-
-
 #[derive(Debug)]
 pub enum SecretSpace {
     Plaintext,
@@ -173,6 +217,8 @@ impl SecretSpace {
     ///
     /// E.g. A TLS 1.3 obfuscated record may have an obfuscated content type of "ApplicationData",
     /// but an internal type of Handshake. This method would return `Handshake`.
+    ///
+    /// This method will also strip off all record padding
     pub fn deframe_record(&mut self, record: &[u8]) -> std::io::Result<(ContentType, Vec<u8>)> {
         let remaining = record;
         let (outer_record_header, remaining) = RecordHeader::decode_from(remaining)?;
@@ -214,7 +260,6 @@ impl SecretSpace {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use crate::{codec::DecodeValue, protocol::HandshakeMessageHeader};
@@ -231,7 +276,7 @@ mod tests {
             hex::decode("8bf4b07633e7de6b46e2a680713d8b0b8b9bcc9592163b8fa32222d650b005f3")
                 .unwrap();
 
-        let space = KeySpace::new(
+        let space = KeySpace::handshake_traffic_secret(
             server_secret,
             iana::Cipher::from_description("TLS_AES_128_GCM_SHA256").unwrap(),
         );
@@ -253,7 +298,7 @@ mod tests {
 
         let aes_128 = iana::Cipher::from_description("TLS_AES_128_GCM_SHA256").unwrap();
 
-        let mut space = KeySpace::new(server_secret, aes_128);
+        let mut space = KeySpace::handshake_traffic_secret(server_secret, aes_128);
 
         let record =
             hex::decode("1703030017c89a8a469e34ecee23cd8fbe8e978763ac2e498ddebcc5").unwrap();

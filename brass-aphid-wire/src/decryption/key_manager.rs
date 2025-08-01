@@ -128,11 +128,15 @@ impl KeyManager {
             Mode::Client => key.client_handshake_traffic_secret?,
             Mode::Server => key.server_handshake_traffic_secret?,
         };
-        let space = KeySpace::new(secret, cipher);
+        let space = KeySpace::handshake_traffic_secret(secret, cipher);
         Some(space)
     }
 
-    pub fn application_space(
+    /// Retrieve the KeySpace for a particular application space.
+    /// 
+    /// Index will be `0` for the initial set of traffic keys, but higher indicies
+    /// will be used in the event of key updates.
+    pub fn first_application_space(
         &self,
         mode: Mode,
         client_random: &[u8],
@@ -143,7 +147,7 @@ impl KeyManager {
             Mode::Client => key.client_application_traffic_secret?,
             Mode::Server => key.server_application_traffic_secret?,
         };
-        let space = KeySpace::new(secret, cipher);
+        let space = KeySpace::first_traffic_secret(secret, cipher);
         Some(space)
     }
 }

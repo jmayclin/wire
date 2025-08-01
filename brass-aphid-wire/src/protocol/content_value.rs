@@ -4,10 +4,7 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13,
-        ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished,
-        HandshakeMessageHeader, HandshakeType, NewSessionTicketTls13, ServerHello,
-        ServerKeyExchange,
+        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13, ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, KeyUpdate, NewSessionTicketTls13, ServerHello, ServerKeyExchange
     },
 };
 
@@ -52,6 +49,7 @@ pub enum HandshakeMessageValue {
     CertVerifyTls13(CertVerifyTls13),
     CertificateRequestTls13(CertificateRequest),
     NewSessionTicketTls13(NewSessionTicketTls13),
+    KeyUpdate(KeyUpdate),
     Finished(Finished),
 }
 
@@ -67,6 +65,7 @@ impl HandshakeMessageValue {
             HandshakeMessageValue::CertVerifyTls13(_) => HandshakeType::CertificateVerify,
             HandshakeMessageValue::CertificateRequestTls13(_) => HandshakeType::CertificateRequest,
             HandshakeMessageValue::NewSessionTicketTls13(_) => HandshakeType::NewSessionTicket,
+            HandshakeMessageValue::KeyUpdate(_) => HandshakeType::KeyUpdate,
             HandshakeMessageValue::Finished(_) => HandshakeType::Finished,
         }
     }
@@ -143,7 +142,10 @@ impl HandshakeMessageValue {
                 let (message, buffer) = Finished::decode_from_with_context(buffer, cipher)?;
                 (HandshakeMessageValue::Finished(message), buffer)
             }
-            HandshakeType::KeyUpdate => todo!(),
+            HandshakeType::KeyUpdate => {
+                let (message, buffer) = buffer.decode_value()?;
+                (HandshakeMessageValue::KeyUpdate(message), buffer)
+            },
             HandshakeType::MessageHash => todo!(),
         };
 

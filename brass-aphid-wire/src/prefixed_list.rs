@@ -87,7 +87,6 @@ where
         &self.items
     }
 
-    #[cfg(test)]
     pub fn into_inner(self) -> Vec<T> {
         self.items
     }

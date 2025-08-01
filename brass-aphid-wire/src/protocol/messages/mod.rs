@@ -231,15 +231,6 @@ pub struct CertificateTls13 {
     pub certificate_list: PrefixedList<CertificateEntry, U24>,
 }
 
-/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
-#[repr(u8)]
-pub enum KeyUpdateRequest {
-    UpdateNotRequested = 0,
-    UpdateRequested = 1,
-}
-impl_byte_value!(KeyUpdateRequest, u8);
-
 /// This message is used in TLS 1.2 to convey the server's key material
 ///
 /// This message is omitted for RSA, DH_DSS, and DH_RSA ciphersuites.
@@ -373,4 +364,20 @@ pub struct NewSessionTicketTls13 {
 pub struct CertVerifyTls13 {
     pub algorithm: iana::SignatureScheme,
     pub signature: PrefixedBlob<u16>,
+}
+
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+#[repr(u8)]
+pub enum KeyUpdateRequest {
+    UpdateNotRequested = 0,
+    UpdateRequested = 1,
+}
+impl_byte_value!(KeyUpdateRequest, u8);
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct KeyUpdate {
+    pub request_update: KeyUpdateRequest,
 }

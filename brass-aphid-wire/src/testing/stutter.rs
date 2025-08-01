@@ -43,10 +43,6 @@ impl SslContextExtension for SslContextBuilder {
 
 #[test]
 fn single_message_many_records() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .init();
-    
     let key_manager = KeyManager::new();
     let key_manager_handle = key_manager.clone();
 
