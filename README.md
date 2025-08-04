@@ -60,7 +60,12 @@ I am too lazy for that, but too curious to let it go.
 
 Currently the feature set is relatively limited, and the code is loaded with ~~panics~~ fun surprises where I haven't implemented things.
 
-The biggest limitations
-- no TLS 1.2-ish support
-- no supports outside of the 3 main TLS 1.3 AEADs
-- no support for messages over multiple records
+# Roadmap
+- [X] messages across multiple records
+- [X] KeyUpdate support
+- [X] HelloRetry support
+- [ ] Offline Decryption (this should just work, tests needed)
+- [ ] TLS 1.2 support
+- [ ] expand cipher support to CBC (unlikely to support anything else)
+- [ ] gate TLS library dependencies behind features
+- [ ] switch to RustCrypto instead of AWS-LC for skinniness (and WASM support)

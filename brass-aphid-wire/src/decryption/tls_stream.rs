@@ -78,6 +78,18 @@ impl TlsStream {
         }
     }
 
+    /// Set `need_next_key_space` to false
+    /// 
+    /// While the "sender" streams are almost entirely independent, that get's broken
+    /// in the event of a hello retry. We need a way for the server stream to tell
+    /// the client stream that there's actually another client hello on the way.
+    pub fn suppress_next_key_state(&mut self) {
+        debug_assert_eq!(self.sender, Mode::Client);
+        debug_assert!(matches!(self.key_space, SecretSpace::Plaintext));
+        debug_assert!(self.needs_next_key_space);
+        self.needs_next_key_space = false;
+    }
+
     /// Add bytes to a TLS stream.
     ///
     /// In the case of a DecryptingPipe, this is the method called by the Read &
@@ -230,12 +242,16 @@ impl TlsStream {
                     self.needs_next_key_space = true;
                 }
                 // server hello is end of server plaintext
-                if matches!(
-                    value,
-                    ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
-                ) {
-                    self.needs_next_key_space = true;
+                if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = &value {
+                    if !sh.is_hello_retry_tls13() {
+                        self.needs_next_key_space = true;
+                    }
                 }
+                // if matches!(
+                //     value,
+                //     ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
+                // ) {
+                // }
                 // server finished is end of server handshake space
                 // client finished is end of client handshake space
                 if matches!(
@@ -260,9 +276,12 @@ impl TlsStream {
                     state.client_random = Some(s.random.to_vec());
                 }
                 if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(s)) = &value {
+                    // Even if it was a hello retry, this is fine. Because the HRR still
+                    // contains the actual selected parameters.
                     state.selected_cipher = Some(s.cipher_suite);
                     state.selected_protocol = Some(s.selected_version()?);
                     tracing::info!("setting cipher and selected version: {state:?}");
+
                 }
 
                 content.push(value);

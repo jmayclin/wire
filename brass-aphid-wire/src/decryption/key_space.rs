@@ -89,6 +89,7 @@ pub struct KeySpace {
 }
 
 impl KeySpace {
+    /// Construct a new key space from a handshake secret
     pub fn handshake_traffic_secret(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
         // https://www.rfc-editor.org/rfc/rfc8446#section-7.3
         // [sender]_write_key = HKDF-Expand-Label(Secret, "key", "", key_length)
@@ -102,6 +103,7 @@ impl KeySpace {
         }
     }
 
+    /// Construct a new key space from the first traffic secret
     pub fn first_traffic_secret(secret: Vec<u8>, cipher: iana::Cipher) -> Self {
         // https://www.rfc-editor.org/rfc/rfc8446#section-7.3
         // [sender]_write_key = HKDF-Expand-Label(Secret, "key", "", key_length)
@@ -115,7 +117,7 @@ impl KeySpace {
         }
     }
 
-    /// Return a new key space following a key update
+    /// Construct a new key space following a key update
     ///
     /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-7.2
     pub fn key_update(&self) -> Self {
@@ -239,7 +241,6 @@ impl SecretSpace {
                 while plaintext.ends_with(&[0]) {
                     padding += 1;
                     plaintext.pop();
-                    // plaintext.remove(plaintext.len() - 1);
                 }
 
                 // TODO: is it possible to send a record which is entirely padding?

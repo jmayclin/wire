@@ -5,11 +5,19 @@
 //          read the next type of message
 // rustls: seems to be more delayed than either of them.
 
+
+// basic online decryption tests
 mod openssl_decrypted_transcript;
 mod s2n_decrypted_transcript;
-mod s2n_encrypted_transcripts;
 mod rustls_decrypted_transcript;
-mod stutter;
+
+
+// This has a tiny bit of extra TLS 1.2 coverage
+mod s2n_encrypted_transcripts;
+
+// TLS edge cases
 mod key_update;
+mod messages_across_records;
 mod hello_retry;
+
 pub mod utilities;

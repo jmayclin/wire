@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use crate::{
     decryption::{key_manager::KeyManager, tls_stream::TlsStream, Mode},
     iana::{self, Protocol},
-    protocol::content_value::ContentValue,
+    protocol::content_value::{ContentValue, HandshakeMessageValue},
 };
 
 #[derive(Debug, Default, Clone)]
@@ -69,6 +69,22 @@ impl StreamDecrypter {
                 .server_stream
                 .digest_bytes(&mut self.state, &self.key_manager),
         }?;
+
+        // if the sever sent a hello retry, we need to let the client stream know
+        // that it should move the key space forwards
+        let hello_retry = content.iter().any(|content| {
+            if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = content {
+                sh.is_hello_retry_tls13()
+            } else {
+                false
+            }
+        });
+        
+        if hello_retry {
+            // hello retry is indicated by the server hello
+            debug_assert_eq!(mode, Mode::Server);
+            self.client_stream.suppress_next_key_state();
+        }
 
         self.transcript
             .lock()

@@ -19,6 +19,11 @@ use crate::{
 use brass_aphid_wire_macros::{DecodeEnum, DecodeStruct, EncodeEnum, EncodeStruct};
 use std::io::{ErrorKind, Read};
 
+const TLS13_HELLO_RETRY_RANDOM: &[u8] = &[
+    207, 33, 173, 116, 229, 154, 97, 17, 190, 29, 140, 2, 30, 101, 184, 145, 194, 162, 17, 22, 122,
+    187, 140, 94, 7, 158, 9, 226, 200, 168, 51, 156,
+];
+
 #[derive(Clone, Debug, PartialEq, Eq, EncodeStruct, DecodeStruct)]
 pub struct RecordHeader {
     pub content_type: ContentType,
@@ -112,6 +117,10 @@ impl ServerHello {
         } else {
             Ok(self.protocol_version)
         }
+    }
+
+    pub fn is_hello_retry_tls13(&self) -> bool {
+        &self.random == TLS13_HELLO_RETRY_RANDOM
     }
 }
 
@@ -366,7 +375,6 @@ pub struct CertVerifyTls13 {
     pub signature: PrefixedBlob<u16>,
 }
 
-
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.6.3
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
@@ -380,4 +388,15 @@ impl_byte_value!(KeyUpdateRequest, u8);
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct KeyUpdate {
     pub request_update: KeyUpdateRequest,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::protocol::messages::TLS13_HELLO_RETRY_RANDOM;
+
+    #[test]
+    fn hrr() {
+        let hex = "CF21AD74E59A6111BE1D8C021E65B891C2A211167ABB8C5E079E09E2C8A8339C";
+        assert_eq!(TLS13_HELLO_RETRY_RANDOM, &hex::decode(hex).unwrap());
+    }
 }
