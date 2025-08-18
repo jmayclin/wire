@@ -97,7 +97,7 @@ fn s2n_client_test() -> anyhow::Result<()> {
         .lock()
         .unwrap()
         .clone();
-    // std::fs::write("resources/traces/s2n-tls.log", format!("{messages:#?}"));
+    // std::fs::write("resources/traces/s2n-tls_0_3.log", format!("{messages:#?}"));
     assert_s2n_decryption_correct(messages);
 
 

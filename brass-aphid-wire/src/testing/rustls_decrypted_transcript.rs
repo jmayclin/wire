@@ -96,7 +96,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
         transcript.clone()
     });
 
-    // std::fs::write("resources/traces/broken-rustls.log", format!("{transcript:#?}"));
+    // std::fs::write("resources/traces/rustls_0_23.log", format!("{transcript:#?}"));
 
     let mut messages = transcript.drain(..);
 

@@ -11,10 +11,6 @@ use crate::{
 
 #[test]
 fn key_update_request() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .init();
-
     let key_manager = KeyManager::new();
 
     let client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();

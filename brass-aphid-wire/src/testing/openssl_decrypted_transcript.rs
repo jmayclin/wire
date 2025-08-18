@@ -81,7 +81,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
         transcript.clone()
     });
 
-    // std::fs::write("resources/traces/openssl.log", format!("{transcript:#?}"));
+    // std::fs::write("resources/traces/openssl_3_5.log", format!("{transcript:#?}"));
 
     let mut messages = transcript.drain(..);
 

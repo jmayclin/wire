@@ -287,19 +287,19 @@ pub struct PresharedKeyClientHello {
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
 #[repr(u8)]
 enum CertificateStatusType {
-    Ocsp = 1
+    Ocsp = 1,
 }
 impl_byte_value!(CertificateStatusType, u8);
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 struct OcspStatusRequest {
     responder_id_list: PrefixedList<ResponderId, u16>,
-    extensions: PrefixedBlob<u16>
+    extensions: PrefixedBlob<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 struct ResponderId {
-    id: PrefixedBlob<u16>
+    id: PrefixedBlob<u16>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc6066.html#section-8
@@ -313,6 +313,10 @@ pub struct CertificateStatus {
 /// Sent in ClientHello or ServerHello in TLS 1.2(ish?)
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct EncryptThenMac {}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc6962#section-3.3.1
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct SignedCertificateTimestampClientHello {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloExtensionData {
@@ -332,6 +336,7 @@ pub enum ClientHelloExtensionData {
     Padding(Padding),
     EncryptThenMac(EncryptThenMac),
     StatusRequest(CertificateStatus),
+    SignedCertificateTimestamp(SignedCertificateTimestampClientHello),
     Unknown(Vec<u8>),
 }
 
@@ -368,7 +373,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::StatusRequest => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::StatusRequest(value)
-            },
+            }
             ExtensionType::SupportedGroups => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SupportedGroups(value)
@@ -384,7 +389,10 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::UseSrtp => todo!(),
             ExtensionType::Heartbeat => todo!(),
             ExtensionType::ApplicationLayerProtocolNegotiation => todo!(),
-            ExtensionType::SignedCertificateTimestamp => todo!(),
+            ExtensionType::SignedCertificateTimestamp => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::SignedCertificateTimestamp(value)
+            }
             ExtensionType::ClientCertificateType => todo!(),
             ExtensionType::ServerCertificateType => todo!(),
             ExtensionType::Padding => {
@@ -483,6 +491,9 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::Padding(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EncryptThenMac(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::StatusRequest(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::SignedCertificateTimestamp(extension) => {
+                extension.encode_to_vec()
+            }
         }?;
         let length = extension_data.len() as u16;
         buffer.encode_value(&length)?;
