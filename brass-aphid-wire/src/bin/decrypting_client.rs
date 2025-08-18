@@ -10,7 +10,7 @@ fn main() -> anyhow::Result<()> {
     // first we create a KeyManager. Most TLS implementation will set the key-logging
     // callback per-config. The KeyManager provides that callback.
     let key_manager = KeyManager::new();
-    
+
     let client_config = {
         let key_manager_handle = key_manager.clone();
         let mut builder = SslContext::builder(SslMethod::tls_client())?;

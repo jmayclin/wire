@@ -137,7 +137,6 @@ impl DecodeValue for u64 {
     }
 }
 
-
 impl EncodeValue for u8 {
     fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
         buffer.write_all(&[*self])?;

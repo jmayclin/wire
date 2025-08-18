@@ -409,6 +409,7 @@ mod signature_scheme_tests {
     #[test]
     fn mldsa() {
         let dsa = SignatureScheme::from_value(2309).unwrap();
+        assert_eq!(dsa.description, "mldsa");
     }
 }
 

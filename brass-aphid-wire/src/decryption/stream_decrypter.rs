@@ -79,7 +79,7 @@ impl StreamDecrypter {
                 false
             }
         });
-        
+
         if hello_retry {
             // hello retry is indicated by the server hello
             debug_assert_eq!(mode, Mode::Server);

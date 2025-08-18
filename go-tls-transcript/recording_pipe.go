@@ -2,12 +2,12 @@ package susgobench
 
 import (
 	"encoding/binary"
-	"log"
 	"net"
 	"os"
 	"time"
 )
 
+// Transmission is a chunk of bytes sent by a TLS participant.
 type Transmission struct {
 	// "client" or "server"
 	Name string
@@ -16,29 +16,28 @@ type Transmission struct {
 
 // Each clients owns a dummy connection
 type RecordingPipe struct {
+	// "client" or "server"
 	name string
 	// a channel used to read bytes from the peer
 	readCh chan []byte
 	// a channel used to writes bytes to the peer
 	writeCh chan []byte
+
+	// TODO: get rid of this buffer
 	readBuf []byte
 
+	// stores all of the transcripts
 	Transcript *[]Transmission
-
-	closing *bool
 }
 
 func NewClientServerRecordingPipe() (*RecordingPipe, *RecordingPipe, *[]Transmission) {
 	clientTransmit := make(chan []byte)
 	serverTransmit := make(chan []byte)
 
-	clientDone := false
-	serverDone := false
-
 	transcript := make([]Transmission, 0)
 
-	clientConn := NewRecordingPipe("client", serverTransmit, clientTransmit, &clientDone)
-	serverConn := NewRecordingPipe("server", clientTransmit, serverTransmit, &serverDone)
+	clientConn := NewRecordingPipe("client", serverTransmit, clientTransmit)
+	serverConn := NewRecordingPipe("server", clientTransmit, serverTransmit)
 
 	// Go is giving me anxiety. How did it decide what transcript would be? Implicit
 	// default?
@@ -48,20 +47,15 @@ func NewClientServerRecordingPipe() (*RecordingPipe, *RecordingPipe, *[]Transmis
 	return clientConn, serverConn, &transcript
 }
 
-func NewRecordingPipe(name string, readCh, writeCh chan []byte, closing *bool) *RecordingPipe {
+func NewRecordingPipe(name string, readCh, writeCh chan []byte) *RecordingPipe {
 	return &RecordingPipe{
 		name:    name,
 		readCh:  readCh,
 		writeCh: writeCh,
-		closing: closing,
 	}
 }
 
 func (pipe *RecordingPipe) Read(destination []byte) (n int, err error) {
-	log.Printf("%s read", pipe.name)
-	if *pipe.closing {
-		return 0, net.ErrClosed
-	}
 	if len(pipe.readBuf) == 0 {
 		pipe.readBuf = <-pipe.readCh
 	}
@@ -73,11 +67,6 @@ func (pipe *RecordingPipe) Read(destination []byte) (n int, err error) {
 }
 
 func (pipe *RecordingPipe) Write(source []byte) (n int, err error) {
-	log.Printf("%s write", pipe.name)
-
-	if *pipe.closing {
-		return len(source), nil
-	}
 	pipe.writeCh <- source
 
 	dataCopy := make([]byte, len(source))
@@ -88,7 +77,6 @@ func (pipe *RecordingPipe) Write(source []byte) (n int, err error) {
 	}
 	*pipe.Transcript = append(*pipe.Transcript, transmission)
 
-	log.Printf("%s write %d", pipe.name, len(source))
 	return len(source), nil
 }
 

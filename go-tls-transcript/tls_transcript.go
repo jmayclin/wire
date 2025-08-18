@@ -18,16 +18,6 @@ const (
 
 // CertFlavor -> (cert purpose -> cert path)
 var CertMap = map[CertFlavor]map[string]string{
-	// Rsa2048: {
-	// 	"certFile": "certs/rsae_pkcs_2048_sha256/server-chain.pem",
-	// 	"keyFile":  "certs/rsae_pkcs_2048_sha256/server-key.pem",
-	// 	"caFile":   "certs/rsae_pkcs_2048_sha256/ca-cert.pem",
-	// },
-	// Ecdsa256: {
-	// 	"certFile": "certs/ec_ecdsa_p256_sha256/server-chain.pem",
-	// 	"keyFile":  "certs/ec_ecdsa_p256_sha256/server-key.pem",
-	// 	"caFile":   "certs/ec_ecdsa_p256_sha256/ca-cert.pem",
-	// },
 	Ecdsa384: {
 		"certFile": "../brass-aphid-wire/certs/ecdsa384/server-chain.pem",
 		"keyFile":  "../brass-aphid-wire/certs/ecdsa384/server-key.pem",
@@ -118,11 +108,6 @@ func resumptionClientConfig(certFlavor CertFlavor) *tls.Config {
 }
 
 func harness_handshake(caseName string, clientConfig, serverConfig *tls.Config) {
-	// clientToServer := make(chan []byte)
-	// serverToClient := make(chan []byte)
-
-	// clientDone := false
-	// serverDone := false
 	outFile := "resources/" + caseName + "_keys.log"
 	f, err := os.Create(outFile)
 	if err != nil {
@@ -137,8 +122,6 @@ func harness_handshake(caseName string, clientConfig, serverConfig *tls.Config) 
 	serverConn := tls.Server(serverTransport, serverConfig)
 
 	log.Println(transcript)
-
-	//done := make(chan bool)
 
 	go func() {
 		// I hate this, but I guess necessary bc Go doesn't allow shadowing?

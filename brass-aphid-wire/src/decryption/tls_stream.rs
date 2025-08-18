@@ -79,7 +79,7 @@ impl TlsStream {
     }
 
     /// Set `need_next_key_space` to false
-    /// 
+    ///
     /// While the "sender" streams are almost entirely independent, that get's broken
     /// in the event of a hello retry. We need a way for the server stream to tell
     /// the client stream that there's actually another client hello on the way.
@@ -281,7 +281,6 @@ impl TlsStream {
                     state.selected_cipher = Some(s.cipher_suite);
                     state.selected_protocol = Some(s.selected_version()?);
                     tracing::info!("setting cipher and selected version: {state:?}");
-
                 }
 
                 content.push(value);

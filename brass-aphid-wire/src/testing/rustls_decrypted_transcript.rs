@@ -5,14 +5,13 @@ use std::{
 };
 
 use rustls::{
-    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer}, RootCertStore,
+    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
+    RootCertStore,
 };
 
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
-    protocol::{
-        ContentType, HandshakeType
-    },
+    protocol::{ContentType, HandshakeType},
     testing::utilities::{get_cert_path, PemType, SigType},
 };
 
@@ -47,7 +46,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
             .map(|cert| cert.unwrap())
             .collect();
         let private_key = PrivateKeyDer::from_pem_file(private_key_file).unwrap();
-        
+
         rustls::ServerConfig::builder()
             .with_no_client_auth()
             .with_single_cert(certs, private_key)?
@@ -127,34 +126,51 @@ fn rustls_client_test() -> anyhow::Result<()> {
         HandshakeType::Finished
     );
 
-
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
     assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::EncryptedExtensions);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::EncryptedExtensions
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::Certificate);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::Certificate
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::CertificateVerify);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::CertificateVerify
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::Finished);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::Finished
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::NewSessionTicket
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::NewSessionTicket
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);

@@ -127,7 +127,11 @@ where
         if current_buffer_size < length_usize {
             return Err(std::io::Error::new(
                 ErrorKind::UnexpectedEof,
-                format!("not enough data available for PrefixedList of {} with {} length", type_name::<T>(), type_name::<L>()),
+                format!(
+                    "not enough data available for PrefixedList of {} with {} length",
+                    type_name::<T>(),
+                    type_name::<L>()
+                ),
             ));
         }
         let target_buffer_size = current_buffer_size - length_usize;

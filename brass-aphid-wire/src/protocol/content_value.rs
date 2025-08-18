@@ -4,7 +4,10 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13, ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, KeyUpdate, NewSessionTicketTls13, ServerHello, ServerKeyExchange
+        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13,
+        ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished,
+        HandshakeMessageHeader, HandshakeType, KeyUpdate, NewSessionTicketTls13, ServerHello,
+        ServerKeyExchange,
     },
 };
 
@@ -145,7 +148,7 @@ impl HandshakeMessageValue {
             HandshakeType::KeyUpdate => {
                 let (message, buffer) = buffer.decode_value()?;
                 (HandshakeMessageValue::KeyUpdate(message), buffer)
-            },
+            }
             HandshakeType::MessageHash => todo!(),
         };
 

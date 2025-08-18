@@ -103,10 +103,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
     // encrypted data
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.content_type(),
-        ContentType::ChangeCipherSpec
-    );
+    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
 
     // encrypted data
     let (sender, message) = messages.next().unwrap();
@@ -139,10 +136,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Client);
-    assert_eq!(
-        message.content_type(),
-        ContentType::ChangeCipherSpec
-    );
+    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Client);
@@ -169,11 +163,17 @@ fn openssl_server_test() -> anyhow::Result<()> {
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::NewSessionTicket
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    assert_eq!(message.as_handshake().handshake_type(), HandshakeType::NewSessionTicket);
+    assert_eq!(
+        message.as_handshake().handshake_type(),
+        HandshakeType::NewSessionTicket
+    );
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);

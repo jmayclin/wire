@@ -1,6 +1,7 @@
-
 use crate::{
-    decryption::{key_space::KeySpace, Mode}, iana::{self}, key_log::NssLog
+    decryption::{key_space::KeySpace, Mode},
+    iana::{self},
+    key_log::NssLog,
 };
 use std::{
     collections::HashMap,
@@ -133,7 +134,7 @@ impl KeyManager {
     }
 
     /// Retrieve the KeySpace for a particular application space.
-    /// 
+    ///
     /// Index will be `0` for the initial set of traffic keys, but higher indicies
     /// will be used in the event of key updates.
     pub fn first_application_space(

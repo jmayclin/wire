@@ -2,9 +2,9 @@ pub mod codec;
 pub mod decryption;
 pub mod iana;
 pub mod key_log;
+pub mod offline;
 pub mod prefixed_list;
 pub mod protocol;
-pub mod offline;
 #[cfg(test)]
 pub mod testing;
 

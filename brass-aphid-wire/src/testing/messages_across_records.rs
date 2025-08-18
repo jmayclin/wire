@@ -13,7 +13,6 @@ use crate::{
     testing::utilities::{get_cert_path, PemType, SigType},
 };
 
-
 // # define SSL_CTX_set_max_send_fragment(ctx,m) \
 //        SSL_CTX_ctrl(ctx,SSL_CTRL_SET_MAX_SEND_FRAGMENT,m,NULL)
 fn SSL_CTX_set_max_send_fragment(ctx: *mut SSL_CTX, length: std::ffi::c_long) -> std::ffi::c_long {
@@ -36,7 +35,7 @@ trait SslContextExtension {
 impl SslContextExtension for SslContextBuilder {
     fn set_max_send_fragment(&mut self, length: u64) {
         let ptr = self.as_ptr();
-        let res = SSL_CTX_set_max_send_fragment(ptr, length as _) ;
+        let res = SSL_CTX_set_max_send_fragment(ptr, length as _);
         assert_eq!(res, 1);
     }
 }

@@ -1,13 +1,9 @@
 use std::{ffi::c_void, io::ErrorKind};
 
-use crate::{
-    decryption::{
-        key_manager::KeyManager,
-        s2n_tls_intercept::{
-            generic_recv_cb, generic_send_cb, ArchaicCPipe, PeerIntoS2ntlsInsides,
-        },
-        stream_decrypter::StreamDecrypter,
-    },
+use crate::decryption::{
+    key_manager::KeyManager,
+    s2n_tls_intercept::{generic_recv_cb, generic_send_cb, ArchaicCPipe, PeerIntoS2ntlsInsides},
+    stream_decrypter::StreamDecrypter,
 };
 
 pub mod key_manager;
@@ -31,8 +27,6 @@ impl Mode {
         }
     }
 }
-
-
 
 // basic test -> 1 message, 1 record,
 // harder test -> 2 messages, 1 record,
