@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"net"
 	"os"
+	"path/filepath"
+	"runtime"
 	"time"
 )
 
@@ -121,7 +123,15 @@ func peerByte(peer string) byte {
 }
 
 func DumpTranscript(filename string, transcript *[]Transmission) error {
-	outFile := "resources/" + filename + "_transcript.bin"
+	goVersion := runtime.Version()
+	resourceDir := filepath.Join("resources", goVersion)
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(resourceDir, 0755); err != nil {
+		return err
+	}
+
+	outFile := filepath.Join(resourceDir, filename+"_transcript.bin")
 	f, err := os.Create(outFile)
 	if err != nil {
 		return err

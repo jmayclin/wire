@@ -322,6 +322,7 @@ pub struct SignedCertificateTimestampClientHello {}
 pub enum ClientHelloExtensionData {
     PreSharedKey(PresharedKeyClientHello),
     SignatureScheme(SignatureSchemeList),
+    SignatureSchemeCert(SignatureSchemeList),
     ServerName(ServerNameClientHello),
     SupportedVersions(SupportedVersionClientHello),
     SupportedGroups(SupportedGroups),
@@ -447,7 +448,10 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::CertificateAuthorities => todo!(),
             ExtensionType::OidFilters => todo!(),
             ExtensionType::PostHandshakeAuth => todo!(),
-            ExtensionType::SignatureAlgorithmsCert => todo!(),
+            ExtensionType::SignatureAlgorithmsCert => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::SignatureSchemeCert(value)
+            },
             ExtensionType::KeyShare => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::KeyShare(value)
@@ -476,6 +480,7 @@ impl EncodeValue for ClientHelloExtension {
         let extension_data = match &self.extension_data {
             ClientHelloExtensionData::PreSharedKey(e) => e.encode_to_vec(),
             ClientHelloExtensionData::SignatureScheme(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::SignatureSchemeCert(e) => e.encode_to_vec(),
             ClientHelloExtensionData::ServerName(e) => e.encode_to_vec(),
             ClientHelloExtensionData::SupportedVersions(e) => e.encode_to_vec(),
             ClientHelloExtensionData::SupportedGroups(e) => e.encode_to_vec(),

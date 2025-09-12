@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 )
 
 const (
@@ -107,8 +109,20 @@ func resumptionClientConfig(certFlavor CertFlavor) *tls.Config {
 	}
 }
 
+func getGoVersion() string {
+	return runtime.Version()
+}
+
 func harness_handshake(caseName string, clientConfig, serverConfig *tls.Config) {
-	outFile := "resources/" + caseName + "_keys.log"
+	goVersion := getGoVersion()
+	resourceDir := filepath.Join("resources", goVersion)
+
+	// Create directory if it doesn't exist
+	if err := os.MkdirAll(resourceDir, 0755); err != nil {
+		log.Fatalf("failed to create directory: %v", err)
+	}
+
+	outFile := filepath.Join(resourceDir, caseName+"_keys.log")
 	f, err := os.Create(outFile)
 	if err != nil {
 		log.Fatal(err)
