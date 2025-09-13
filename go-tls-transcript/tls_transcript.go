@@ -12,35 +12,15 @@ import (
 	"runtime"
 )
 
+// Certificate paths
 const (
-	certFile = "certs/rsae_pkcs_2048_sha256/server-chain.pem"
-	keyFile  = "certs/rsae_pkcs_2048_sha256/server-key.pem"
-	caFile   = "certs/rsae_pkcs_2048_sha256/ca-cert.pem"
+	certFile = "../brass-aphid-wire/certs/ecdsa384/server-chain.pem"
+	keyFile  = "../brass-aphid-wire/certs/ecdsa384/server-key.pem"
+	caFile   = "../brass-aphid-wire/certs/ecdsa384/ca-cert.pem"
 )
 
-// CertFlavor -> (cert purpose -> cert path)
-var CertMap = map[CertFlavor]map[string]string{
-	Ecdsa384: {
-		"certFile": "../brass-aphid-wire/certs/ecdsa384/server-chain.pem",
-		"keyFile":  "../brass-aphid-wire/certs/ecdsa384/server-key.pem",
-		"caFile":   "../brass-aphid-wire/certs/ecdsa384/ca-cert.pem",
-	},
-}
-
-var CertFlavors = []CertFlavor{Rsa2048, Ecdsa256, Ecdsa384}
-
-// Go doesn't have enums bc it hates me. I think this is the "go-y" way to do this?
-type CertFlavor int
-
-const (
-	Rsa2048 CertFlavor = iota
-	Ecdsa256
-	Ecdsa384
-)
-
-func tlsServerConfig(certFlavor CertFlavor) *tls.Config {
-	// global vars are almost certainly a bag idea, right?
-	cert, err := tls.LoadX509KeyPair(CertMap[Ecdsa384]["certFile"], CertMap[Ecdsa384]["keyFile"])
+func tlsServerConfig() *tls.Config {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatalf("failed to load key pair: %v", err)
 	}
@@ -50,31 +30,28 @@ func tlsServerConfig(certFlavor CertFlavor) *tls.Config {
 	}
 }
 
-func resumptionServerConfig(certFlavor CertFlavor) *tls.Config {
-
+func resumptionServerConfig() *tls.Config {
 	// Generate session ticket keys
 	sessionTicketKeys := make([][32]byte, 1)
 	if _, err := rand.Read(sessionTicketKeys[0][:]); err != nil {
 		log.Fatalf("failed to generate session ticket key: %v", err)
 	}
 
-	cert, err := tls.LoadX509KeyPair(CertMap[Ecdsa384]["certFile"], CertMap[Ecdsa384]["keyFile"])
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		log.Fatalf("failed to load key pair: %v", err)
 	}
 
-	// TODO: is explicitly disabling session ticket necessary?
 	config := tls.Config{
 		Certificates:           []tls.Certificate{cert},
 		SessionTicketKey:       sessionTicketKeys[0],
 		SessionTicketsDisabled: false,
 	}
-	//config.SetSessionTicketKeys(sessionTicketKeys)
 	return &config
 }
 
-func tlsClientConfig(certFlavor CertFlavor) *tls.Config {
-	caCert, err := os.ReadFile(CertMap[Ecdsa384]["caFile"])
+func tlsClientConfig() *tls.Config {
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		log.Fatalf("failed to read CA certificate: %v", err)
 	}
@@ -90,8 +67,8 @@ func tlsClientConfig(certFlavor CertFlavor) *tls.Config {
 	}
 }
 
-func resumptionClientConfig(certFlavor CertFlavor) *tls.Config {
-	caCert, err := os.ReadFile(CertMap[Ecdsa384]["caFile"])
+func resumptionClientConfig() *tls.Config {
+	caCert, err := os.ReadFile(caFile)
 	if err != nil {
 		log.Fatalf("failed to read CA certificate: %v", err)
 	}

@@ -11,6 +11,7 @@ GO_VERSIONS=("1.10" "1.11" "1.12" "1.13" "1.14" "1.15" "1.16" "1.17" "1.18" "1.1
 # Get the absolute path to the project directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"  # Parent directory of the script directory
+GO_TLS_DIR="$SCRIPT_DIR"  # The go-tls-transcript directory
 
 echo "=== TLS Artifact Generation for Multiple Go Versions ==="
 echo "Project directory: $PROJECT_DIR"
