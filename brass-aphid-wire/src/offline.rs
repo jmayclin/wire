@@ -64,48 +64,6 @@ mod tests {
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";
 
     #[test]
-    fn go_server_auth() {
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::TRACE)
-            .init();
-
-        let path = PathBuf::from_str(GO_RESOURCES).unwrap();
-        let transcript_path = path.join("server_auth_transcript.bin");
-        let key_path = path.join("server_auth_keys.log");
-
-        let transcript = Conversation::transcript(&transcript_path).unwrap();
-        assert_eq!(transcript.len(), 5);
-
-        let keys = Conversation::keys(&key_path);
-
-        let mut decrypter = StreamDecrypter::new(keys);
-        for (sender, data) in transcript {
-            decrypter.record_tx(&data, sender);
-            decrypter.decrypt_records(sender).unwrap();
-        }
-
-        decrypter.dump_transcript("resources/traces/go.log");
-    }
-
-    #[test]
-    fn go_with_nst() {
-        let path = PathBuf::from_str(GO_RESOURCES).unwrap();
-        let transcript_path = path.join("resumption_transcript.bin");
-        let key_path = path.join("resumption_keys.log");
-
-        let transcript = Conversation::transcript(&transcript_path).unwrap();
-        let keys = Conversation::keys(&key_path);
-
-        let mut decrypter = StreamDecrypter::new(keys);
-        for (sender, data) in transcript {
-            decrypter.record_tx(&data, sender);
-            decrypter.decrypt_records(sender).unwrap();
-        }
-
-        decrypter.dump_transcript("resources/traces/go_nst.log");
-    }
-
-    #[test]
     fn go_transcripts() {
         // Set up tracing for better debugging
         tracing_subscriber::fmt()
