@@ -6,7 +6,7 @@
 # Set the Go versions to test
 # Currently we only support 1.16 -> 1.25, because we rely on os.ReadFile which was 
 # only added in 1.16 https://pkg.go.dev/os#ReadFile
-GO_VERSIONS=("1.10" "1.11" "1.12" "1.13" "1.14" "1.15" "1.16" "1.17" "1.18" "1.19" "1.20" "1.21" "1.22" "1.23" "1.24" "1.25")
+GO_VERSIONS=("1.16" "1.17" "1.18" "1.19" "1.20" "1.21" "1.22" "1.23" "1.24" "1.25")
 
 # Get the absolute path to the project directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -31,10 +31,21 @@ run_tests_for_version() {
     # Run the tests in the container
     # Mount the project directory to /app in the container
     # We need to mount the whole project directory because it contains the certs
-    podman run --rm \
-        -v "$PROJECT_DIR:/app:Z" \
-        "docker.io/golang:$go_version" \
-        bash -c "cd /app/go-tls-transcript && go test -v"
+    
+    # For Go versions 1.21 and above, run go mod tidy with -go flag to update the Go version
+    if [[ $(echo "$go_version >= 1.21" | bc -l) -eq 1 ]]; then
+        echo "Go version $go_version >= 1.21, running go mod tidy -go=$go_version"
+        podman run --rm \
+            -v "$PROJECT_DIR:/app:Z" \
+            "docker.io/golang:$go_version" \
+            bash -c "cd /app/go-tls-transcript && go mod tidy -go=$go_version && go test -v"
+    else
+        echo "Go version $go_version < 1.21, skipping go mod tidy"
+        podman run --rm \
+            -v "$PROJECT_DIR:/app:Z" \
+            "docker.io/golang:$go_version" \
+            bash -c "cd /app/go-tls-transcript && go test -v"
+    fi
     
     # Check if the tests were successful
     if [ $? -eq 0 ]; then
