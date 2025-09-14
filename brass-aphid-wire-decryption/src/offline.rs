@@ -64,6 +64,7 @@ mod tests {
 
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";
     const JAVA_RESOURCES: &str = "../java-tls-transcript/resources";
+    const OSSL_RESOURCES: &str = "../openssl-tls-transcript/resources";
     const CAPABILITY_COMPENDIUM: &str = "../capability-compendium/resources/";
     
     #[test]
@@ -152,6 +153,43 @@ mod tests {
 
             let transcript = format!("{:#?}", client_hello);
             let output_file = output_folder.join(format!("java_{version}.log"));
+            // let output_path = format!("resources/traces/java_{}_client_hello.log", version);
+
+            std::fs::write(output_file, transcript).unwrap();
+        }
+    }
+
+
+    #[test]
+    fn ossl_client_hellos() {
+        // Set up tracing for better debugging
+        // tracing_subscriber::fmt()
+        //     .with_max_level(tracing::Level::TRACE)
+        //     .init();
+        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM).unwrap().join("client_hellos");
+        
+        let base_path = PathBuf::from_str(OSSL_RESOURCES).unwrap();
+        let openssl_versions = std::fs::read_dir(&base_path).unwrap();
+        
+        for entry in openssl_versions {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            
+            // Extract version from directory name
+            let version = path.file_name().unwrap().to_str().unwrap();
+            
+            println!("Processing openssl client hello: {}", version);
+
+            let client_hello = path.join("client_hello.bin");
+            let client_hello = std::fs::read(client_hello).unwrap();
+            let buffer = client_hello.as_slice();
+
+            let (record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
+            let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
+            let client_hello = ClientHello::decode_from_exact(buffer).unwrap();
+
+            let transcript = format!("{:#?}", client_hello);
+            let output_file = output_folder.join(format!("{version}.log"));
             // let output_path = format!("resources/traces/java_{}_client_hello.log", version);
 
             std::fs::write(output_file, transcript).unwrap();

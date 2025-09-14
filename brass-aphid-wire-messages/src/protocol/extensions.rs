@@ -198,6 +198,24 @@ pub struct PskKeyExchangeModes {
     ke_modes: PrefixedList<PskKeyExchangeMode, u8>,
 }
 
+//    enum {
+//       peer_allowed_to_send(1),
+//       peer_not_allowed_to_send(2),
+//       (255)
+//    } HeartbeatMode;
+
+//    struct {
+//       HeartbeatMode mode;
+//    } HeartbeatExtension;
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[repr(u8)]
+pub enum HeatbeatMode {
+    PeerAllowedToSend,
+    PeerNotAllowedToSend,
+}
+impl_byte_value!(HeatbeatMode, u8);
+
+
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5077#section-3.2
 /// AHHHHHH why are you like this. I do not approve. You have to look backwards.
 #[derive(Debug, Clone, PartialEq, Eq, EncodeStruct)]
@@ -338,6 +356,7 @@ pub enum ClientHelloExtensionData {
     EncryptThenMac(EncryptThenMac),
     StatusRequest(CertificateStatus),
     SignedCertificateTimestamp(SignedCertificateTimestampClientHello),
+    Heartbeat(HeatbeatMode),
     Unknown(Vec<u8>),
 }
 
@@ -388,7 +407,10 @@ impl DecodeValue for ClientHelloExtension {
                 ClientHelloExtensionData::SignatureScheme(value)
             }
             ExtensionType::UseSrtp => todo!(),
-            ExtensionType::Heartbeat => todo!(),
+            ExtensionType::Heartbeat => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::Heartbeat(value)
+            },
             ExtensionType::ApplicationLayerProtocolNegotiation => todo!(),
             ExtensionType::SignedCertificateTimestamp => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
@@ -496,6 +518,7 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::Padding(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EncryptThenMac(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::StatusRequest(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::Heartbeat(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::SignedCertificateTimestamp(extension) => {
                 extension.encode_to_vec()
             }

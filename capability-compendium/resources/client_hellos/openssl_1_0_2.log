@@ -1,0 +1,352 @@
+ClientHello {
+    protocol_version: TLSv1_2,
+    random: [
+        141,
+        154,
+        137,
+        155,
+        178,
+        198,
+        240,
+        183,
+        55,
+        125,
+        69,
+        29,
+        174,
+        141,
+        29,
+        1,
+        135,
+        180,
+        4,
+        175,
+        143,
+        42,
+        248,
+        255,
+        140,
+        243,
+        167,
+        5,
+        45,
+        165,
+        160,
+        170,
+    ],
+    session_id: PrefixedBlob(
+        0,
+    ),
+    offered_ciphers: PrefixedList {
+        length: 172,
+        items: [
+            TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+            TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+            TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA384,
+            TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA384,
+            TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+            TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+            TLS_DH_DSS_WITH_AES_256_GCM_SHA384,
+            TLS_DHE_DSS_WITH_AES_256_GCM_SHA384,
+            TLS_DH_RSA_WITH_AES_256_GCM_SHA384,
+            TLS_DHE_RSA_WITH_AES_256_GCM_SHA384,
+            TLS_DHE_RSA_WITH_AES_256_CBC_SHA256,
+            TLS_DHE_DSS_WITH_AES_256_CBC_SHA256,
+            TLS_DH_RSA_WITH_AES_256_CBC_SHA256,
+            TLS_DH_DSS_WITH_AES_256_CBC_SHA256,
+            TLS_DHE_RSA_WITH_AES_256_CBC_SHA,
+            TLS_DHE_DSS_WITH_AES_256_CBC_SHA,
+            TLS_DH_RSA_WITH_AES_256_CBC_SHA,
+            TLS_DH_DSS_WITH_AES_256_CBC_SHA,
+            TLS_DHE_RSA_WITH_CAMELLIA_256_CBC_SHA,
+            TLS_DHE_DSS_WITH_CAMELLIA_256_CBC_SHA,
+            TLS_DH_RSA_WITH_CAMELLIA_256_CBC_SHA,
+            TLS_DH_DSS_WITH_CAMELLIA_256_CBC_SHA,
+            TLS_ECDH_RSA_WITH_AES_256_GCM_SHA384,
+            TLS_ECDH_ECDSA_WITH_AES_256_GCM_SHA384,
+            TLS_ECDH_RSA_WITH_AES_256_CBC_SHA384,
+            TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA384,
+            TLS_ECDH_RSA_WITH_AES_256_CBC_SHA,
+            TLS_ECDH_ECDSA_WITH_AES_256_CBC_SHA,
+            TLS_RSA_WITH_AES_256_GCM_SHA384,
+            TLS_RSA_WITH_AES_256_CBC_SHA256,
+            TLS_RSA_WITH_AES_256_CBC_SHA,
+            TLS_RSA_WITH_CAMELLIA_256_CBC_SHA,
+            TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+            TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+            TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA256,
+            TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA256,
+            TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+            TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+            TLS_DH_DSS_WITH_AES_128_GCM_SHA256,
+            TLS_DHE_DSS_WITH_AES_128_GCM_SHA256,
+            TLS_DH_RSA_WITH_AES_128_GCM_SHA256,
+            TLS_DHE_RSA_WITH_AES_128_GCM_SHA256,
+            TLS_DHE_RSA_WITH_AES_128_CBC_SHA256,
+            TLS_DHE_DSS_WITH_AES_128_CBC_SHA256,
+            TLS_DH_RSA_WITH_AES_128_CBC_SHA256,
+            TLS_DH_DSS_WITH_AES_128_CBC_SHA256,
+            TLS_DHE_RSA_WITH_AES_128_CBC_SHA,
+            TLS_DHE_DSS_WITH_AES_128_CBC_SHA,
+            TLS_DH_RSA_WITH_AES_128_CBC_SHA,
+            TLS_DH_DSS_WITH_AES_128_CBC_SHA,
+            TLS_DHE_RSA_WITH_SEED_CBC_SHA,
+            TLS_DHE_DSS_WITH_SEED_CBC_SHA,
+            TLS_DH_RSA_WITH_SEED_CBC_SHA,
+            TLS_DH_DSS_WITH_SEED_CBC_SHA,
+            TLS_DHE_RSA_WITH_CAMELLIA_128_CBC_SHA,
+            TLS_DHE_DSS_WITH_CAMELLIA_128_CBC_SHA,
+            TLS_DH_RSA_WITH_CAMELLIA_128_CBC_SHA,
+            TLS_DH_DSS_WITH_CAMELLIA_128_CBC_SHA,
+            TLS_ECDH_RSA_WITH_AES_128_GCM_SHA256,
+            TLS_ECDH_ECDSA_WITH_AES_128_GCM_SHA256,
+            TLS_ECDH_RSA_WITH_AES_128_CBC_SHA256,
+            TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA256,
+            TLS_ECDH_RSA_WITH_AES_128_CBC_SHA,
+            TLS_ECDH_ECDSA_WITH_AES_128_CBC_SHA,
+            TLS_RSA_WITH_AES_128_GCM_SHA256,
+            TLS_RSA_WITH_AES_128_CBC_SHA256,
+            TLS_RSA_WITH_AES_128_CBC_SHA,
+            TLS_RSA_WITH_SEED_CBC_SHA,
+            TLS_RSA_WITH_CAMELLIA_128_CBC_SHA,
+            TLS_RSA_WITH_IDEA_CBC_SHA,
+            TLS_ECDHE_RSA_WITH_RC4_128_SHA,
+            TLS_ECDHE_ECDSA_WITH_RC4_128_SHA,
+            TLS_ECDH_RSA_WITH_RC4_128_SHA,
+            TLS_ECDH_ECDSA_WITH_RC4_128_SHA,
+            TLS_RSA_WITH_RC4_128_SHA,
+            TLS_RSA_WITH_RC4_128_MD5,
+            TLS_ECDHE_RSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_ECDHE_ECDSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_DHE_RSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_DHE_DSS_WITH_3DES_EDE_CBC_SHA,
+            TLS_DH_RSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_DH_DSS_WITH_3DES_EDE_CBC_SHA,
+            TLS_ECDH_RSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_ECDH_ECDSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_RSA_WITH_3DES_EDE_CBC_SHA,
+            TLS_EMPTY_RENEGOTIATION_INFO_SCSV,
+        ],
+    },
+    compression_methods: PrefixedBlob(
+        1,
+    ),
+    extensions: Some(
+        PrefixedList {
+            length: 105,
+            items: [
+                ClientHelloExtension {
+                    extension_type: ServerName,
+                    extension_data: ServerName(
+                        ServerNameClientHello {
+                            server_name_list: PrefixedList {
+                                length: 14,
+                                items: [
+                                    ServerName {
+                                        name_type: Host,
+                                        host_name: "example.com",
+                                    },
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: EcPointFormats,
+                    extension_data: EcPointFormat(
+                        EcPointFormatList {
+                            ec_point_format_list: PrefixedList {
+                                length: 3,
+                                items: [
+                                    Uncompressed,
+                                    AnsiX962CompressedPrime,
+                                    AnsiX962CompressedChar2,
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SupportedGroups,
+                    extension_data: SupportedGroups(
+                        SupportedGroups {
+                            named_curve_list: PrefixedList {
+                                length: 26,
+                                items: [
+                                    Group {
+                                        value: 23,
+                                        description: "secp256r1",
+                                    },
+                                    Group {
+                                        value: 25,
+                                        description: "secp521r1",
+                                    },
+                                    Group {
+                                        value: 28,
+                                        description: "brainpoolP512r1",
+                                    },
+                                    Group {
+                                        value: 27,
+                                        description: "brainpoolP384r1",
+                                    },
+                                    Group {
+                                        value: 24,
+                                        description: "secp384r1",
+                                    },
+                                    Group {
+                                        value: 26,
+                                        description: "brainpoolP256r1",
+                                    },
+                                    Group {
+                                        value: 22,
+                                        description: "secp256k1",
+                                    },
+                                    Group {
+                                        value: 14,
+                                        description: "sect571r1",
+                                    },
+                                    Group {
+                                        value: 13,
+                                        description: "sect571k1",
+                                    },
+                                    Group {
+                                        value: 11,
+                                        description: "sect409k1",
+                                    },
+                                    Group {
+                                        value: 12,
+                                        description: "sect409r1",
+                                    },
+                                    Group {
+                                        value: 9,
+                                        description: "sect283k1",
+                                    },
+                                    Group {
+                                        value: 10,
+                                        description: "sect283r1",
+                                    },
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SessionTicket,
+                    extension_data: SessionTicket(
+                        SessionTicket {
+                            ticket: [],
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SignatureAlgorithms,
+                    extension_data: SignatureScheme(
+                        SignatureSchemeList {
+                            supported_signature_algorithms: PrefixedList {
+                                length: 30,
+                                items: [
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: Heartbeat,
+                    extension_data: Heartbeat(
+                        PeerNotAllowedToSend,
+                    ),
+                },
+            ],
+        },
+    ),
+}

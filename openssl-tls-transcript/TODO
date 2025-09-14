@@ -1,0 +1,3 @@
+Generate code that captures the raw bytes of an openssl client hello and dumps them to `client_hello.bin`. Don't worry about separating out record headers/etc, I'll handle that on the rust side.
+
+The implementation should be a single .c file. You may not use the system libcrypto/openssl. Instead you should set up CMake to provision OpenSSL through the External Project functionality. 
