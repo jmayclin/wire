@@ -14,9 +14,9 @@ import (
 
 // Certificate paths
 const (
-	certFile = "../brass-aphid-wire/certs/ecdsa384/server-chain.pem"
-	keyFile  = "../brass-aphid-wire/certs/ecdsa384/server-key.pem"
-	caFile   = "../brass-aphid-wire/certs/ecdsa384/ca-cert.pem"
+	certFile = "../certs/ecdsa384/server-chain.pem"
+	keyFile  = "../certs/ecdsa384/server-key.pem"
+	caFile   = "../certs/ecdsa384/ca-cert.pem"
 )
 
 func tlsServerConfig() *tls.Config {

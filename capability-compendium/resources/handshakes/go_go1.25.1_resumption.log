@@ -1,0 +1,676 @@
+Mutex {
+    data: [
+        (
+            Client,
+            Handshake(
+                ClientHello(
+                    ClientHello {
+                        protocol_version: TLSv1_2,
+                        random: [
+                            27,
+                            226,
+                            74,
+                            81,
+                            93,
+                            156,
+                            246,
+                            111,
+                            41,
+                            50,
+                            137,
+                            67,
+                            206,
+                            234,
+                            147,
+                            227,
+                            180,
+                            69,
+                            253,
+                            105,
+                            128,
+                            152,
+                            82,
+                            86,
+                            50,
+                            24,
+                            56,
+                            154,
+                            11,
+                            83,
+                            119,
+                            222,
+                        ],
+                        session_id: PrefixedBlob(
+                            32,
+                        ),
+                        offered_ciphers: PrefixedList {
+                            length: 26,
+                            items: [
+                                TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
+                                TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
+                                TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,
+                                TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,
+                                TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256,
+                                TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256,
+                                TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA,
+                                TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA,
+                                TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA,
+                                TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA,
+                                TLS_AES_128_GCM_SHA256,
+                                TLS_AES_256_GCM_SHA384,
+                                TLS_CHACHA20_POLY1305_SHA256,
+                            ],
+                        },
+                        compression_methods: PrefixedBlob(
+                            1,
+                        ),
+                        extensions: Some(
+                            PrefixedList {
+                                length: 1399,
+                                items: [
+                                    ClientHelloExtension {
+                                        extension_type: ServerName,
+                                        extension_data: ServerName(
+                                            ServerNameClientHello {
+                                                server_name_list: PrefixedList {
+                                                    length: 12,
+                                                    items: [
+                                                        ServerName {
+                                                            name_type: Host,
+                                                            host_name: "localhost",
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: EcPointFormats,
+                                        extension_data: EcPointFormat(
+                                            EcPointFormatList {
+                                                ec_point_format_list: PrefixedList {
+                                                    length: 1,
+                                                    items: [
+                                                        Uncompressed,
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SessionTicket,
+                                        extension_data: SessionTicket(
+                                            SessionTicket {
+                                                ticket: [],
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: RenegotiationInfo,
+                                        extension_data: RenegotiationInfo(
+                                            RenegotiationInfo {
+                                                renegotiated_connection: PrefixedBlob(
+                                                    0,
+                                                ),
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: ExtendedMasterSecret,
+                                        extension_data: ExtendedMasterSecret(
+                                            ExtendedMasterSecret,
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SignedCertificateTimestamp,
+                                        extension_data: SignedCertificateTimestamp(
+                                            SignedCertificateTimestampClientHello,
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: StatusRequest,
+                                        extension_data: StatusRequest(
+                                            CertificateStatus {
+                                                status_type: Ocsp,
+                                                request: OcspStatusRequest {
+                                                    responder_id_list: PrefixedList {
+                                                        length: 0,
+                                                        items: [],
+                                                    },
+                                                    extensions: PrefixedBlob(
+                                                        0,
+                                                    ),
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SupportedGroups,
+                                        extension_data: SupportedGroups(
+                                            SupportedGroups {
+                                                named_curve_list: PrefixedList {
+                                                    length: 10,
+                                                    items: [
+                                                        Group {
+                                                            value: 4588,
+                                                            description: "X25519MLKEM768",
+                                                        },
+                                                        Group {
+                                                            value: 29,
+                                                            description: "x25519",
+                                                        },
+                                                        Group {
+                                                            value: 23,
+                                                            description: "secp256r1",
+                                                        },
+                                                        Group {
+                                                            value: 24,
+                                                            description: "secp384r1",
+                                                        },
+                                                        Group {
+                                                            value: 25,
+                                                            description: "secp521r1",
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SignatureAlgorithms,
+                                        extension_data: SignatureScheme(
+                                            SignatureSchemeList {
+                                                supported_signature_algorithms: PrefixedList {
+                                                    length: 20,
+                                                    items: [
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2052,
+                                                                description: "rsa_pss_rsae_sha256",
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha256,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2055,
+                                                                description: "ed25519",
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2053,
+                                                                description: "rsa_pss_rsae_sha384",
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2054,
+                                                                description: "rsa_pss_rsae_sha512",
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha256,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha384,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha512,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha384,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha512,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SignatureAlgorithmsCert,
+                                        extension_data: SignatureSchemeCert(
+                                            SignatureSchemeList {
+                                                supported_signature_algorithms: PrefixedList {
+                                                    length: 24,
+                                                    items: [
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2052,
+                                                                description: "rsa_pss_rsae_sha256",
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha256,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2055,
+                                                                description: "ed25519",
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2053,
+                                                                description: "rsa_pss_rsae_sha384",
+                                                            },
+                                                        ),
+                                                        SignatureScheme(
+                                                            SignatureScheme {
+                                                                value: 2054,
+                                                                description: "rsa_pss_rsae_sha512",
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha256,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha384,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha512,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha384,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha512,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha1,
+                                                                signature: Rsa,
+                                                            },
+                                                        ),
+                                                        SignatureHash(
+                                                            SignatureAndHashAlgorithm {
+                                                                hash: Sha1,
+                                                                signature: Ecdsa,
+                                                            },
+                                                        ),
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: SupportedVersions,
+                                        extension_data: SupportedVersions(
+                                            SupportedVersionClientHello {
+                                                versions: PrefixedList {
+                                                    length: 4,
+                                                    items: [
+                                                        TLSv1_3,
+                                                        TLSv1_2,
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: KeyShare,
+                                        extension_data: KeyShare(
+                                            KeyShareClientHello {
+                                                client_shares: PrefixedList {
+                                                    length: 1256,
+                                                    items: [
+                                                        KeyShare {
+                                                            group: Group {
+                                                                value: 4588,
+                                                                description: "X25519MLKEM768",
+                                                            },
+                                                            key_exchange: PrefixedBlob(
+                                                                1216,
+                                                            ),
+                                                        },
+                                                        KeyShare {
+                                                            group: Group {
+                                                                value: 29,
+                                                                description: "x25519",
+                                                            },
+                                                            key_exchange: PrefixedBlob(
+                                                                32,
+                                                            ),
+                                                        },
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                    ClientHelloExtension {
+                                        extension_type: PskKeyExchangeModes,
+                                        extension_data: PskKeyExchangeModes(
+                                            PskKeyExchangeModes {
+                                                ke_modes: PrefixedList {
+                                                    length: 1,
+                                                    items: [
+                                                        PskDheKe,
+                                                    ],
+                                                },
+                                            },
+                                        ),
+                                    },
+                                ],
+                            },
+                        ),
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                ServerHello(
+                    ServerHello {
+                        protocol_version: TLSv1_2,
+                        random: [
+                            201,
+                            10,
+                            211,
+                            153,
+                            60,
+                            172,
+                            33,
+                            34,
+                            118,
+                            87,
+                            150,
+                            148,
+                            2,
+                            86,
+                            159,
+                            164,
+                            65,
+                            72,
+                            82,
+                            99,
+                            22,
+                            82,
+                            253,
+                            241,
+                            53,
+                            50,
+                            13,
+                            250,
+                            89,
+                            231,
+                            16,
+                            37,
+                        ],
+                        session_id_echo: PrefixedBlob(
+                            32,
+                        ),
+                        cipher_suite: TLS_AES_128_GCM_SHA256,
+                        legacy_compression_method: 0,
+                        extensions: PrefixedList {
+                            length: 1134,
+                            items: [
+                                Extension {
+                                    extension_type: SupportedVersions,
+                                    extension_data: PrefixedBlob(
+                                        2,
+                                    ),
+                                },
+                                Extension {
+                                    extension_type: KeyShare,
+                                    extension_data: PrefixedBlob(
+                                        1124,
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            ChangeCipherSpec(
+                ChangeCipherSpec,
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                EncryptedExtensions(
+                    EncryptedExtensions {
+                        extensions: PrefixedBlob(
+                            4,
+                        ),
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                CertificateTls13(
+                    CertificateTls13 {
+                        certificate_request_context: PrefixedBlob(
+                            0,
+                        ),
+                        certificate_list: PrefixedList {
+                            length: U24(
+                                1450,
+                            ),
+                            items: [
+                                CertificateEntry {
+                                    cert_data: PrefixedBlob(
+                                        471,
+                                    ),
+                                    extensions: PrefixedBlob(
+                                        0,
+                                    ),
+                                },
+                                CertificateEntry {
+                                    cert_data: PrefixedBlob(
+                                        483,
+                                    ),
+                                    extensions: PrefixedBlob(
+                                        0,
+                                    ),
+                                },
+                                CertificateEntry {
+                                    cert_data: PrefixedBlob(
+                                        481,
+                                    ),
+                                    extensions: PrefixedBlob(
+                                        0,
+                                    ),
+                                },
+                            ],
+                        },
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                CertVerifyTls13(
+                    CertVerifyTls13 {
+                        algorithm: SignatureScheme {
+                            value: 1283,
+                            description: "ecdsa_secp384r1_sha384",
+                        },
+                        signature: PrefixedBlob(
+                            102,
+                        ),
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                Finished(
+                    Finished {
+                        verify_data: [
+                            171,
+                            4,
+                            8,
+                            128,
+                            19,
+                            6,
+                            237,
+                            242,
+                            82,
+                            150,
+                            0,
+                            112,
+                            152,
+                            196,
+                            210,
+                            163,
+                            140,
+                            213,
+                            247,
+                            119,
+                            125,
+                            104,
+                            87,
+                            27,
+                            219,
+                            86,
+                            170,
+                            237,
+                            201,
+                            116,
+                            188,
+                            160,
+                        ],
+                    },
+                ),
+            ),
+        ),
+        (
+            Server,
+            Handshake(
+                NewSessionTicketTls13(
+                    NewSessionTicketTls13 {
+                        ticket_lifetime: 604800,
+                        ticket_age_add: 506413679,
+                        ticket_nonce: PrefixedBlob(
+                            0,
+                        ),
+                        ticket: PrefixedBlob(
+                            105,
+                        ),
+                        extensions: PrefixedList {
+                            length: 0,
+                            items: [],
+                        },
+                    },
+                ),
+            ),
+        ),
+        (
+            Client,
+            ChangeCipherSpec(
+                ChangeCipherSpec,
+            ),
+        ),
+        (
+            Client,
+            Handshake(
+                Finished(
+                    Finished {
+                        verify_data: [
+                            142,
+                            21,
+                            146,
+                            229,
+                            153,
+                            29,
+                            73,
+                            166,
+                            26,
+                            67,
+                            32,
+                            71,
+                            52,
+                            194,
+                            12,
+                            53,
+                            91,
+                            227,
+                            72,
+                            186,
+                            30,
+                            231,
+                            239,
+                            72,
+                            134,
+                            145,
+                            230,
+                            176,
+                            36,
+                            142,
+                            174,
+                            11,
+                        ],
+                    },
+                ),
+            ),
+        ),
+        (
+            Client,
+            Alert(
+                Alert {
+                    level: Warning,
+                    description: CloseNotify,
+                },
+            ),
+        ),
+        (
+            Server,
+            Alert(
+                Alert {
+                    level: Warning,
+                    description: CloseNotify,
+                },
+            ),
+        ),
+    ],
+    poisoned: false,
+    ..
+}

@@ -1,8 +1,9 @@
 [workspace]
 members = [
-    "brass-aphid-wire",
+    "brass-aphid-wire-messages", 
+    "brass-aphid-wire-decryption",
     "brass-aphid-wire-macros",
-    "brass-aphid-wire/fuzz",
+    "brass-aphid-wire-messages/fuzz", "capability-compendium",
 ]
 
 [workspace.package]
