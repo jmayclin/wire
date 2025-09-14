@@ -64,8 +64,10 @@ Currently the feature set is relatively limited, and the code is loaded with ~~p
 - [X] messages across multiple records
 - [X] KeyUpdate support
 - [X] HelloRetry support
-- [ ] Offline Decryption (this should just work, tests needed)
+- [X] Offline Decryption (this should just work, tests needed)
 - [ ] TLS 1.2 support
 - [ ] expand cipher support to CBC (unlikely to support anything else)
 - [ ] gate TLS library dependencies behind features
 - [ ] switch to RustCrypto instead of AWS-LC for skinniness (and WASM support)
+- [ ] separate `brass-aphid-wire` into two crates, one for message codecs, and one for the decryption logic
+- [ ] move all of the trace functionality into it's own crate.

@@ -18,5 +18,12 @@
         "titleBar.inactiveBackground": "#55e2e899",
         "titleBar.inactiveForeground": "#15202b99"
     },
-    "peacock.remoteColor": "#55e2e8"
+    "peacock.remoteColor": "#55e2e8",
+    "cSpell.words": [
+        "ciphersuite",
+        "ciphersuites",
+        "decrypter",
+        "ecdh",
+        "repr"
+    ]
 }

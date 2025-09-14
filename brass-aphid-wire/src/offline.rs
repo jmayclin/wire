@@ -58,17 +58,18 @@ impl Conversation {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decryption::stream_decrypter::StreamDecrypter;
+    use crate::{decryption::stream_decrypter::StreamDecrypter, protocol::{ClientHello, HandshakeMessageHeader, RecordHeader}};
     use std::{path::PathBuf, str::FromStr};
 
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";
+    const JAVA_RESOURCES: &str = "../java-tls-transcript/resources";
 
     #[test]
     fn go_transcripts() {
         // Set up tracing for better debugging
-        tracing_subscriber::fmt()
-            .with_max_level(tracing::Level::TRACE)
-            .init();
+        // tracing_subscriber::fmt()
+        //     .with_max_level(tracing::Level::TRACE)
+        //     .init();
         
         // Base path for Go resources
         let base_path = PathBuf::from_str(GO_RESOURCES).unwrap();
@@ -134,6 +135,43 @@ mod tests {
                 decrypter.dump_transcript(&output_path);
                 println!("Generated resumption log: {}", output_path);
             }
+        }
+    }
+
+
+    #[test]
+    fn java_client_hellos() {
+        // Set up tracing for better debugging
+        // tracing_subscriber::fmt()
+        //     .with_max_level(tracing::Level::TRACE)
+        //     .init();
+        
+        let base_path = PathBuf::from_str(JAVA_RESOURCES).unwrap();
+        let java_versions = std::fs::read_dir(&base_path).unwrap();
+        
+        for entry in java_versions {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            
+            // Extract version from directory name
+            let version = path.file_name()
+                .and_then(|name| name.to_str())
+                .unwrap();
+            
+            println!("Processing Java client hello: {}", version);
+
+            let client_hello = path.join("client_hello.bin");
+            let client_hello = std::fs::read(client_hello).unwrap();
+            let buffer = client_hello.as_slice();
+
+            let (record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
+            let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
+            let client_hello = ClientHello::decode_from_exact(buffer).unwrap();
+
+            let transcript = format!("{:#?}", client_hello);
+            let output_path = format!("resources/traces/java_{}_client_hello.log", version);
+
+            std::fs::write(output_path, transcript).unwrap();
         }
     }
 }
