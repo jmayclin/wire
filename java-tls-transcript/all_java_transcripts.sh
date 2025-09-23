@@ -3,7 +3,7 @@
 # Script to generate TLS client hello messages for multiple Java versions using Podman
 
 # Set the Java versions to test
-JAVA_VERSIONS=("8" "11" "17" "21")
+JAVA_VERSIONS=("8" "11" "17" "21" "25")
 
 # Get the absolute path to the project directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -27,7 +27,7 @@ run_for_version() {
     mkdir -p "$JAVA_TLS_DIR/resources/$java_version"
     
     # Determine the appropriate Docker image based on Java version
-    local docker_image="docker.io/eclipse-temurin:$java_version-jdk"
+    local docker_image="docker.io/amazoncorretto:$java_version"
     
     # Run the Java program in the container
     # Mount the project directory to /app in the container
