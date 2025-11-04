@@ -3,7 +3,7 @@ use std::{io::Read, time::Duration};
 use brass_aphid_wire_decryption::decryption::{key_manager::KeyManager, DecryptingPipe};
 use openssl::ssl::{Ssl, SslContext, SslMethod, SslStream};
 
-const DOMAIN: &str = "www.amazon.com";
+const DOMAIN: &str = "postman-echo.com";
 const PORT: u16 = 443;
 
 fn main() -> anyhow::Result<()> {

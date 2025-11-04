@@ -1,0 +1,405 @@
+ClientHello {
+    protocol_version: TLSv1_2,
+    random: [
+        184,
+        8,
+        37,
+        68,
+        132,
+        66,
+        217,
+        20,
+        70,
+        163,
+        60,
+        88,
+        189,
+        199,
+        140,
+        165,
+        241,
+        39,
+        84,
+        10,
+        168,
+        14,
+        170,
+        13,
+        1,
+        109,
+        87,
+        170,
+        91,
+        210,
+        61,
+        133,
+    ],
+    session_id: PrefixedBlob(
+        0,
+    ),
+    offered_ciphers: PrefixedList {
+        length: 4,
+        items: [
+            TLS_RSA_WITH_AES_256_CBC_SHA,
+            TLS_RSA_WITH_AES_128_CBC_SHA,
+        ],
+    },
+    compression_methods: PrefixedBlob(
+        1,
+    ),
+    extensions: Some(
+        PrefixedList {
+            length: 138,
+            items: [
+                ClientHelloExtension {
+                    extension_type: StatusRequest,
+                    extension_data: StatusRequest(
+                        CertificateStatus {
+                            status_type: Ocsp,
+                            request: OcspStatusRequest {
+                                responder_id_list: PrefixedList {
+                                    length: 0,
+                                    items: [],
+                                },
+                                extensions: PrefixedBlob(
+                                    0,
+                                ),
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: Unknown(
+                        17,
+                    ),
+                    extension_data: Unknown(
+                        [
+                            0,
+                            7,
+                            2,
+                            0,
+                            4,
+                            0,
+                            0,
+                            0,
+                            0,
+                        ],
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: ExtendedMasterSecret,
+                    extension_data: ExtendedMasterSecret(
+                        ExtendedMasterSecret,
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SessionTicket,
+                    extension_data: SessionTicket(
+                        SessionTicket {
+                            ticket: [],
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SignatureAlgorithms,
+                    extension_data: SignatureScheme(
+                        SignatureSchemeList {
+                            supported_signature_algorithms: PrefixedList {
+                                length: 42,
+                                items: [
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2055,
+                                            description: "ed25519",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2056,
+                                            description: "ed448",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2052,
+                                            description: "rsa_pss_rsae_sha256",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2053,
+                                            description: "rsa_pss_rsae_sha384",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2054,
+                                            description: "rsa_pss_rsae_sha512",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2057,
+                                            description: "rsa_pss_pss_sha256",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2058,
+                                            description: "rsa_pss_pss_sha384",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2059,
+                                            description: "rsa_pss_pss_sha512",
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SupportedVersions,
+                    extension_data: SupportedVersions(
+                        SupportedVersionClientHello {
+                            versions: PrefixedList {
+                                length: 2,
+                                items: [
+                                    TLSv1_2,
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: SignatureAlgorithmsCert,
+                    extension_data: SignatureSchemeCert(
+                        SignatureSchemeList {
+                            supported_signature_algorithms: PrefixedList {
+                                length: 42,
+                                items: [
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2055,
+                                            description: "ed25519",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2056,
+                                            description: "ed448",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2052,
+                                            description: "rsa_pss_rsae_sha256",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2053,
+                                            description: "rsa_pss_rsae_sha384",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2054,
+                                            description: "rsa_pss_rsae_sha512",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2057,
+                                            description: "rsa_pss_pss_sha256",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2058,
+                                            description: "rsa_pss_pss_sha384",
+                                        },
+                                    ),
+                                    SignatureScheme(
+                                        SignatureScheme {
+                                            value: 2059,
+                                            description: "rsa_pss_pss_sha512",
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha384,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha512,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha256,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha224,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Ecdsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Rsa,
+                                        },
+                                    ),
+                                    SignatureHash(
+                                        SignatureAndHashAlgorithm {
+                                            hash: Sha1,
+                                            signature: Dsa,
+                                        },
+                                    ),
+                                ],
+                            },
+                        },
+                    ),
+                },
+                ClientHelloExtension {
+                    extension_type: RenegotiationInfo,
+                    extension_data: RenegotiationInfo(
+                        RenegotiationInfo {
+                            renegotiated_connection: PrefixedBlob(
+                                0,
+                            ),
+                        },
+                    ),
+                },
+            ],
+        },
+    ),
+}
