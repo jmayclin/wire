@@ -1,6 +1,4 @@
-use crate::{
-    decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides},
-};
+use crate::decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides};
 use brass_aphid_wire_messages::protocol::content_value::ContentValue;
 use s2n_tls::{enums::Mode, testing::TestPair};
 use std::{

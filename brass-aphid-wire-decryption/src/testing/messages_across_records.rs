@@ -1,16 +1,18 @@
 use core::ffi;
 use std::io::{Read, Write};
 
+use crate::{
+    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
+    testing::utilities::{get_cert_path, PemType, SigType},
+};
+use brass_aphid_wire_messages::protocol::{
+    content_value::ContentValue, ContentType, HandshakeType,
+};
 use openssl::ssl::{
     ShutdownResult, Ssl, SslContext, SslContextBuilder, SslFiletype, SslMethod, SslStream,
     SslVerifyMode,
 };
 use openssl_sys::{SSL_CTX_ctrl, SSL_CTX};
-use brass_aphid_wire_messages::protocol::{content_value::ContentValue, ContentType, HandshakeType};
-use crate::{
-    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
-    testing::utilities::{get_cert_path, PemType, SigType},
-};
 
 // # define SSL_CTX_set_max_send_fragment(ctx,m) \
 //        SSL_CTX_ctrl(ctx,SSL_CTRL_SET_MAX_SEND_FRAGMENT,m,NULL)

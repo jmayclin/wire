@@ -1,11 +1,11 @@
-use std::{path::PathBuf, sync::{Arc, Mutex}};
+use crate::decryption::{key_manager::KeyManager, tls_stream::TlsStream, Mode};
 use brass_aphid_wire_messages::{
-iana::{self, Protocol},
+    iana::{self, Protocol},
     protocol::content_value::{ContentValue, HandshakeMessageValue},
 };
-use crate::{
-    decryption::{key_manager::KeyManager, tls_stream::TlsStream, Mode},
-    
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Default, Clone)]

@@ -184,7 +184,9 @@ pub(crate) unsafe extern "C" fn generic_recv_cb<T: std::io::Read>(
 mod tests {
     use std::{ffi::c_void, ptr::NonNull};
 
-    use crate::testing::s2n_tls_intercept::{RECV_CB_OFFSET, RECV_CTX_OFFSET, SEND_CB_OFFSET, SEND_CTX_OFFSET};
+    use crate::testing::s2n_tls_intercept::{
+        RECV_CB_OFFSET, RECV_CTX_OFFSET, SEND_CB_OFFSET, SEND_CTX_OFFSET,
+    };
 
     #[test]
     fn s2n_tls_inspection() {

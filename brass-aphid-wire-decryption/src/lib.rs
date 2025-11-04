@@ -21,5 +21,5 @@ mod discriminant {
         };
     }
 
-    pub(crate) use impl_byte_value;
+    
 }

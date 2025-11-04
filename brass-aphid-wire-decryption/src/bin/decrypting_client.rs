@@ -12,12 +12,14 @@ fn main() -> anyhow::Result<()> {
     let key_manager = KeyManager::new();
 
     let client_config = {
-        let key_manager_handle = key_manager.clone();
         let mut builder = SslContext::builder(SslMethod::tls_client())?;
-        builder.set_keylog_callback(move |sslref, key_log| {
-            // move, so the config stores its own copy of the KeyManager, which is
-            // internally reference counted.
-            key_manager_handle.parse_key_log_line(key_log.as_bytes());
+        builder.set_keylog_callback({
+            let key_manager = key_manager.clone();
+            move |_sslref, key_log| {
+                // move, so the config stores its own copy of the KeyManager, which is
+                // internally reference counted.
+                key_manager.parse_key_log_line(key_log.as_bytes());
+            }
         });
         builder.build()
     };
@@ -26,7 +28,7 @@ fn main() -> anyhow::Result<()> {
 
     // configure the "normal" transport stream.
     let client_stream = std::net::TcpStream::connect(format!("{DOMAIN}:{PORT}")).unwrap();
-    client_stream.set_read_timeout(Some(Duration::from_secs(1)));
+    client_stream.set_read_timeout(Some(Duration::from_secs(1))).unwrap();
 
     // wrap the transport stream in the "decrypting pipe", associating the key manager
     // from before with the decrypting pipe.
@@ -42,7 +44,7 @@ fn main() -> anyhow::Result<()> {
     // this read is necessary to make the client read in the "secret" data that the server
     // sends after the handshake (which is the NST).
     // We set the read_timeout earlier so that this doesn't just hand forever.
-    stream.read(&mut []);
+    let _ = stream.read(&mut []);
     stream.shutdown().unwrap();
 
     let transcript_trace = format!("{:#?}", *transcript.lock().unwrap());

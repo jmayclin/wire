@@ -120,7 +120,7 @@ impl ServerHello {
     }
 
     pub fn is_hello_retry_tls13(&self) -> bool {
-        &self.random == TLS13_HELLO_RETRY_RANDOM
+        self.random == TLS13_HELLO_RETRY_RANDOM
     }
 }
 

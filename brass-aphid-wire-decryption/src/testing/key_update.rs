@@ -1,12 +1,12 @@
-use s2n_tls::testing::TestPair;
-use brass_aphid_wire_messages::protocol::{
-        content_value::{ContentValue, HandshakeMessageValue},
-        ChangeCipherSpec,
-    };
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
     testing::utilities::{s2n_server_config, SigType},
 };
+use brass_aphid_wire_messages::protocol::{
+    content_value::{ContentValue, HandshakeMessageValue},
+    ChangeCipherSpec,
+};
+use s2n_tls::testing::TestPair;
 
 #[test]
 fn key_update_request() -> anyhow::Result<()> {

@@ -1,14 +1,12 @@
-use crate::{
-    decryption::{
-        key_manager::KeyManager, key_space::SecretSpace, stream_decrypter::ConversationState, Mode,
-    },
-
+use crate::decryption::{
+    key_manager::KeyManager, key_space::SecretSpace, stream_decrypter::ConversationState, Mode,
 };
 use brass_aphid_wire_messages::{
-    codec::{DecodeValue, DecodeValueWithContext}, protocol::{
+    codec::{DecodeValue, DecodeValueWithContext},
+    protocol::{
         content_value::{ContentValue, HandshakeMessageValue},
         Alert, ChangeCipherSpec, ContentType, RecordHeader,
-    }
+    },
 };
 use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
 

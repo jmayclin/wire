@@ -1,14 +1,13 @@
 use aws_lc_rs::{aead, hkdf};
 
+use brass_aphid_wire_messages::codec::{DecodeValue, EncodeValue};
 use brass_aphid_wire_messages::{
-    iana, protocol::{ContentType, RecordHeader}
-};
-use brass_aphid_wire_messages::{
-    codec::{DecodeValue, EncodeValue}
+    iana,
+    protocol::{ContentType, RecordHeader},
 };
 
 trait DecryptionCipherExtension {
-    fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm ;
+    fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm;
 
     fn hkdf(&self) -> aws_lc_rs::hkdf::Algorithm;
 }
@@ -280,9 +279,6 @@ mod tests {
         let server_secret =
             hex::decode("4182e4b0b6565a8f7b8586cc35d2ca23f22fa47764a16eaee9e1b21038efd2a4")
                 .unwrap();
-        let client_secret =
-            hex::decode("8bf4b07633e7de6b46e2a680713d8b0b8b9bcc9592163b8fa32222d650b005f3")
-                .unwrap();
 
         let space = KeySpace::handshake_traffic_secret(
             server_secret,
@@ -299,9 +295,6 @@ mod tests {
     fn handshake_record_decrypt() {
         let server_secret =
             hex::decode("64d7b60c7f0d3ca90e47411c575f7eaa8b24d754f3e68ac2d3f060e28395553d")
-                .unwrap();
-        let client_secret =
-            hex::decode("8bf4b07633e7de6b46e2a680713d8b0b8b9bcc9592163b8fa32222d650b005f3")
                 .unwrap();
 
         let aes_128 = iana::Cipher::from_description("TLS_AES_128_GCM_SHA256").unwrap();
@@ -321,7 +314,7 @@ mod tests {
     fn maybe_app_data() {
         let data = hex::decode("08000002000016").unwrap();
 
-        let (header, buffer) = HandshakeMessageHeader::decode_from(data.as_slice()).unwrap();
+        let (header, _) = HandshakeMessageHeader::decode_from(data.as_slice()).unwrap();
         println!("header : {header:#?}");
     }
 }

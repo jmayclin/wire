@@ -215,7 +215,6 @@ pub enum HeatbeatMode {
 }
 impl_byte_value!(HeatbeatMode, u8);
 
-
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5077#section-3.2
 /// AHHHHHH why are you like this. I do not approve. You have to look backwards.
 #[derive(Debug, Clone, PartialEq, Eq, EncodeStruct)]
@@ -410,7 +409,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::Heartbeat => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::Heartbeat(value)
-            },
+            }
             ExtensionType::ApplicationLayerProtocolNegotiation => todo!(),
             ExtensionType::SignedCertificateTimestamp => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
@@ -473,7 +472,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::SignatureAlgorithmsCert => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureSchemeCert(value)
-            },
+            }
             ExtensionType::KeyShare => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::KeyShare(value)

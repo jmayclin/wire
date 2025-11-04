@@ -50,7 +50,7 @@ fn java_stuff() {
         SecurityPolicies::RetailSubsidiary,
         SecurityPolicies::RetailInternal,
         SecurityPolicies::LegacyClient,
-        SecurityPolicies::LegacyStrictSsl
+        SecurityPolicies::LegacyStrictSsl,
     ] {
         let bytes = hex::decode(policy.client_hello()).unwrap();
         let (rh, remaining) = RecordHeader::decode_from(&bytes).unwrap();
@@ -62,15 +62,14 @@ fn java_stuff() {
     }
 }
 
-
 #[test]
 fn apache() {
     const CLIENT_HELLO: &str = "16030301b3010001af0303310569c4ddcc9d77f64783d199c8e1862b23b28d99a3cb86822f64a0f8f3d635201960f4c578b9b6d609a998e0685088488ae5947ae3879addcc642194707bf497004a130213011303c02cc02bcca9c030cca8c02f009fccaa00a3009e00a2c024c028c023c027006b006a00670040c00ac014c009c0130039003800330032009d009c003d003c0035002f00ff0100011c000500050100000000000a00160014001d001700180019001e01000101010201030104000b00020100001100090007020004000000000017000000230000000d002c002a040305030603080708080804080508060809080a080b0401050106010402030303010302020302010202002b00050403040303002d000201010032002c002a040305030603080708080804080508060809080a080b04010501060104020303030103020203020102020033006b0069001d00203247a63fbd63314b19831adaa17e07bb1ea1bb831b7de7c6cc0c03a77d2fd72000170041042f25436fab88b8f14734c6594474c0cde62b568aa8beb3dbfa2074b08d10a6f75ef4bdff0ba6df61819c32e351a61ea789fc342bbc0b690765ff5d217218b749";
-let bytes = hex::decode(CLIENT_HELLO).unwrap();
-        let (rh, remaining) = RecordHeader::decode_from(&bytes).unwrap();
-        let (hh, remaining) = HandshakeMessageHeader::decode_from(remaining).unwrap();
-        let (ch, remaining) = ClientHello::decode_from(remaining).unwrap();
-        assert_eq!(remaining.len(), 0);
-        println!("{ch:#?}");
-        std::fs::write(format!("apache.client_hello"), format!("{ch:#?}")).unwrap();
+    let bytes = hex::decode(CLIENT_HELLO).unwrap();
+    let (rh, remaining) = RecordHeader::decode_from(&bytes).unwrap();
+    let (hh, remaining) = HandshakeMessageHeader::decode_from(remaining).unwrap();
+    let (ch, remaining) = ClientHello::decode_from(remaining).unwrap();
+    assert_eq!(remaining.len(), 0);
+    println!("{ch:#?}");
+    std::fs::write(format!("apache.client_hello"), format!("{ch:#?}")).unwrap();
 }

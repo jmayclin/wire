@@ -1,5 +1,6 @@
 use crate::{
-    protocol::content_value::ContentValue, testing::s2n_tls_intercept::{self, InterceptedSendCallback, PeerIntoS2ntlsInsides},
+    protocol::content_value::ContentValue,
+    testing::s2n_tls_intercept::{self, InterceptedSendCallback, PeerIntoS2ntlsInsides},
 };
 use s2n_tls::{enums::Mode, testing::TestPair};
 use std::{
@@ -55,9 +56,9 @@ impl TestPairExtension for TestPair {
 
 /// Holds all of the writes that occurred during a TLS handshake
 pub struct TestPairTranscript {
-    records: Pin<Arc<RefCell<Vec<(Mode, Vec<u8>)>>>>,
-    client_handle: Box<RecordingSendHandle>,
-    server_handle: Box<RecordingSendHandle>,
+    pub records: Pin<Arc<RefCell<Vec<(Mode, Vec<u8>)>>>>,
+    pub client_handle: Box<RecordingSendHandle>,
+    pub server_handle: Box<RecordingSendHandle>,
 }
 
 impl TestPairTranscript {

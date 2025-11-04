@@ -4,14 +4,14 @@ use std::{
     sync::Arc,
 };
 
-use rustls::{
-    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
-    RootCertStore,
-};
-use brass_aphid_wire_messages::protocol::{ContentType, HandshakeType};
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
     testing::utilities::{get_cert_path, PemType, SigType},
+};
+use brass_aphid_wire_messages::protocol::{ContentType, HandshakeType};
+use rustls::{
+    pki_types::{pem::PemObject, CertificateDer, PrivateKeyDer},
+    RootCertStore,
 };
 
 struct NoVerify {}

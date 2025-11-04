@@ -6,9 +6,9 @@
 // rustls: seems to be more delayed than either of them.
 
 // This has a tiny bit of extra TLS 1.2 coverage
-mod s2n_encrypted_transcripts;
 mod other_client_hellos;
+mod s2n_encrypted_transcripts;
 
-mod transcript;
 mod s2n_tls_intercept;
+mod transcript;
 pub mod utilities;

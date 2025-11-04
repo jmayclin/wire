@@ -1,0 +1,1 @@
+This is an internal dependency of other `brass-aphid-wire` crates.
