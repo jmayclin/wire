@@ -2,6 +2,8 @@
 name = "brass-aphid-wire-macros"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+description = "macros for the brass-aphid ecosystem"
 
 [lib]
 proc-macro = true

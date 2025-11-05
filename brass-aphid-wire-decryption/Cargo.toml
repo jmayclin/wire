@@ -2,6 +2,8 @@
 name = "brass-aphid-wire-decryption"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
+description = "utilities to do runtime decryption of TLS conversations, and helpers for popular TLS libraries"
 
 [dependencies]
 byteorder = "1.5.0"
