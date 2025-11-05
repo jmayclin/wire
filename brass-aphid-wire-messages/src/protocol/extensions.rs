@@ -215,7 +215,6 @@ pub enum HeatbeatMode {
 }
 impl_byte_value!(HeatbeatMode, u8);
 
-
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5077#section-3.2
 /// AHHHHHH why are you like this. I do not approve. You have to look backwards.
 #[derive(Debug, Clone, PartialEq, Eq, EncodeStruct)]
@@ -272,6 +271,37 @@ pub struct RecordSizeLimit {
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct KeyShareClientHello {
     pub client_shares: PrefixedList<KeyShare, u16>,
+}
+
+///= https://www.rfc-editor.org/rfc/rfc8446#section-4.2.8
+///> In a HelloRetryRequest message, the "extension_data" field of this
+///> extension contains a KeyShareHelloRetryRequest value:
+///>
+///> ```c
+///> struct {
+///>     NamedGroup selected_group;
+///> } KeyShareHelloRetryRequest;
+///> ```
+///> selected_group:  The mutually supported group the server intends to negotiate
+///> and is requesting a retried ClientHello/KeyShare for.
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct KeyShareRetryRequest {
+    pub selected_group: iana::Group,
+}
+
+///= https://www.rfc-editor.org/rfc/rfc8446#section-4.2.8
+///> In a ServerHello message, the "extension_data" field of this
+///> extension contains a KeyShareServerHello value:
+///>
+///> struct {
+///>     KeyShareEntry server_share;
+///> } KeyShareServerHello;
+///>
+///> server_share:  A single KeyShareEntry value that is in the same group as one
+///> of the client's shares.
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct KeyShareServerHello {
+    pub server_share: KeyShare,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -410,7 +440,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::Heartbeat => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::Heartbeat(value)
-            },
+            }
             ExtensionType::ApplicationLayerProtocolNegotiation => todo!(),
             ExtensionType::SignedCertificateTimestamp => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
@@ -473,7 +503,7 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::SignatureAlgorithmsCert => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureSchemeCert(value)
-            },
+            }
             ExtensionType::KeyShare => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::KeyShare(value)

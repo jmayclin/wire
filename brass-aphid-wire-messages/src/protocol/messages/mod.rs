@@ -12,7 +12,10 @@ use crate::{
     iana::{self, HashAlgorithm, Protocol, SignatureAlgorithm},
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
-        extensions::{ClientHelloExtension, Extension, ExtensionType, SupportedVersionServerHello},
+        extensions::{
+            ClientHelloExtension, ClientHelloExtensionData, Extension, ExtensionType,
+            KeyShareServerHello, SupportedVersionServerHello,
+        },
         AlertDescription, AlertLevel, ContentType, HandshakeType,
     },
 };
@@ -54,6 +57,33 @@ impl ClientHello {
             Some(extensions) => Ok(extensions.list().iter().map(|ext| ext.raw_extension().unwrap()).collect()),
             None => Err(std::io::Error::new(ErrorKind::NotFound, "you need hotter, younger friends (clients) who send you extensions (aren't TLS 1.0)")),
         }
+    }
+
+    /// Return the list of groups that the client supports
+    pub fn supported_groups(&self) -> Option<Vec<iana::Group>> {
+        for e in self.extensions.as_ref()?.list() {
+            if let ClientHelloExtensionData::SupportedGroups(groups) = &e.extension_data {
+                return Some(groups.named_curve_list.list().to_vec());
+            }
+        }
+        None
+    }
+
+    /// Return the list of groups that the client sent key shares for
+    pub fn key_share(&self) -> Option<Vec<iana::Group>> {
+        for e in self.extensions.as_ref()?.list() {
+            if let ClientHelloExtensionData::KeyShare(groups) = &e.extension_data {
+                return Some(
+                    groups
+                        .client_shares
+                        .list()
+                        .iter()
+                        .map(|key_share| key_share.group)
+                        .collect(),
+                );
+            }
+        }
+        None
     }
 }
 
@@ -119,8 +149,24 @@ impl ServerHello {
         }
     }
 
+    pub fn selected_group(&self) -> std::io::Result<Option<iana::Group>> {
+        let maybe_key_share = self
+            .extensions
+            .list()
+            .iter()
+            .find(|extension| extension.extension_type == ExtensionType::KeyShare);
+
+        if let Some(extension) = maybe_key_share {
+            let key_share =
+                KeyShareServerHello::decode_from_exact(extension.extension_data.blob())?;
+            Ok(Some(key_share.server_share.group))
+        } else {
+            Ok(None)
+        }
+    }
+
     pub fn is_hello_retry_tls13(&self) -> bool {
-        &self.random == TLS13_HELLO_RETRY_RANDOM
+        self.random == TLS13_HELLO_RETRY_RANDOM
     }
 }
 

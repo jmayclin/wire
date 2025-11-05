@@ -9,7 +9,6 @@ use byteorder::{ByteOrder, ReadBytesExt};
 use crate::{
     decryption::{key_manager::KeyManager, Mode},
     key_log::NssLog,
-    prefixed_list::PrefixedBlob,
 };
 
 struct Conversation {
@@ -56,7 +55,10 @@ impl Conversation {
 
 #[cfg(test)]
 mod tests {
-    use brass_aphid_wire_messages::{codec::DecodeValue, protocol::{ClientHello, HandshakeMessageHeader, RecordHeader}};
+    use brass_aphid_wire_messages::{
+        codec::DecodeValue,
+        protocol::{ClientHello, HandshakeMessageHeader, RecordHeader},
+    };
 
     use super::*;
     use crate::decryption::{stream_decrypter::StreamDecrypter, transcript};
@@ -66,32 +68,32 @@ mod tests {
     const JAVA_RESOURCES: &str = "../java-tls-transcript/resources";
     const OSSL_RESOURCES: &str = "../openssl-tls-transcript/resources";
     const CAPABILITY_COMPENDIUM: &str = "../capability-compendium/resources/";
-    
+
     #[test]
     fn go_transcripts() {
         // Set up tracing for better debugging
         // tracing_subscriber::fmt()
         //     .with_max_level(tracing::Level::TRACE)
         //     .init();
-        
+
         // Base path for Go resources
         let base_path = PathBuf::from_str(GO_RESOURCES).unwrap();
-        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM).unwrap().join("handshakes");
+        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM)
+            .unwrap()
+            .join("handshakes");
         println!("outputting to : {output_folder:?}");
 
         // Find all directories that start with "go" (Go version directories)
         let entries = std::fs::read_dir(&base_path).unwrap();
-        
+
         for entry in entries {
             let entry = entry.unwrap();
             let path = entry.path();
-            
+
             // Extract version from directory name
-            let version = path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap();
+            let version = path.file_name().and_then(|name| name.to_str()).unwrap();
             println!("Processing Go version: {}", version);
-            
+
             // Process server auth transcript
             let server_auth_transcript_path = path.join("server_auth_transcript.bin");
             let server_auth_key_path = path.join("server_auth_keys.log");
@@ -101,8 +103,16 @@ mod tests {
             let resumption_key_path = path.join("resumption_keys.log");
 
             for (transcript, key, name) in [
-                (server_auth_transcript_path, server_auth_key_path, "server_auth"),
-                (resumption_transcript_path, resumption_key_path, "resumption"),
+                (
+                    server_auth_transcript_path,
+                    server_auth_key_path,
+                    "server_auth",
+                ),
+                (
+                    resumption_transcript_path,
+                    resumption_key_path,
+                    "resumption",
+                ),
             ] {
                 let transcript = Conversation::transcript(&transcript).unwrap();
                 let keys = Conversation::keys(&key);
@@ -110,7 +120,9 @@ mod tests {
                 let mut decrypter = StreamDecrypter::new(keys);
                 for (sender, data) in transcript {
                     decrypter.record_tx(&data, sender);
-                    decrypter.decrypt_records(sender).expect("Failed to decrypt server auth record");
+                    decrypter
+                        .decrypt_records(sender)
+                        .expect("Failed to decrypt server auth record");
                 }
 
                 let output_file = output_folder.join(format!("go_{version}_{name}.log"));
@@ -120,27 +132,26 @@ mod tests {
         }
     }
 
-
     #[test]
     fn java_client_hellos() {
         // Set up tracing for better debugging
         // tracing_subscriber::fmt()
         //     .with_max_level(tracing::Level::TRACE)
         //     .init();
-        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM).unwrap().join("client_hellos");
-        
+        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM)
+            .unwrap()
+            .join("client_hellos");
+
         let base_path = PathBuf::from_str(JAVA_RESOURCES).unwrap();
         let java_versions = std::fs::read_dir(&base_path).unwrap();
-        
+
         for entry in java_versions {
             let entry = entry.unwrap();
             let path = entry.path();
-            
+
             // Extract version from directory name
-            let version = path.file_name()
-                .and_then(|name| name.to_str())
-                .unwrap();
-            
+            let version = path.file_name().and_then(|name| name.to_str()).unwrap();
+
             println!("Processing Java client hello: {}", version);
 
             let client_hello = path.join("client_hello.bin");
@@ -159,25 +170,26 @@ mod tests {
         }
     }
 
-
     #[test]
     fn ossl_client_hellos() {
         // Set up tracing for better debugging
         // tracing_subscriber::fmt()
         //     .with_max_level(tracing::Level::TRACE)
         //     .init();
-        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM).unwrap().join("client_hellos");
-        
+        let output_folder = PathBuf::from_str(CAPABILITY_COMPENDIUM)
+            .unwrap()
+            .join("client_hellos");
+
         let base_path = PathBuf::from_str(OSSL_RESOURCES).unwrap();
         let openssl_versions = std::fs::read_dir(&base_path).unwrap();
-        
+
         for entry in openssl_versions {
             let entry = entry.unwrap();
             let path = entry.path();
-            
+
             // Extract version from directory name
             let version = path.file_name().unwrap().to_str().unwrap();
-            
+
             println!("Processing openssl client hello: {}", version);
 
             let client_hello = path.join("client_hello.bin");

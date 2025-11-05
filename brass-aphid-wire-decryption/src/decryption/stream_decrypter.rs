@@ -1,11 +1,13 @@
-use std::{path::PathBuf, sync::{Arc, Mutex}};
+use crate::decryption::{
+    key_manager::KeyManager, tls_stream::TlsStream, transcript::Transcript, Mode,
+};
 use brass_aphid_wire_messages::{
-iana::{self, Protocol},
+    iana::{self, Protocol},
     protocol::content_value::{ContentValue, HandshakeMessageValue},
 };
-use crate::{
-    decryption::{key_manager::KeyManager, tls_stream::TlsStream, Mode},
-    
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
 };
 
 #[derive(Debug, Default, Clone)]
@@ -15,6 +17,7 @@ pub struct ConversationState {
     pub selected_cipher: Option<iana::Cipher>,
 }
 
+#[derive(Debug)]
 pub struct StreamDecrypter {
     pub state: ConversationState,
     key_manager: KeyManager,
@@ -44,6 +47,13 @@ impl StreamDecrypter {
             Mode::Client => self.client_stream.feed_bytes(data),
             Mode::Server => self.server_stream.feed_bytes(data),
         };
+    }
+
+    pub fn transcript(&self) -> Transcript {
+        Transcript {
+            record_transcript: Default::default(),
+            content_transcript: Mutex::new(self.transcript.lock().unwrap().clone()),
+        }
     }
 
     pub fn dump_transcript(&self, file: &PathBuf) {

@@ -18,13 +18,14 @@ strum = { version = "0.25", features = ["derive"] }
 # Internal dependencies
 brass-aphid-wire-macros = { path = "../brass-aphid-wire-macros" }
 anyhow = "1.0.98"
-errno = "0.3"
-libc = "0.2.174"
 hex = "0.4.3"
 
 [build-dependencies]
 serde_with = "3.12.0"
 
 [dev-dependencies]
-s2n-tls = {version = "0.3.21", features = ["unstable-testing"]}
-s2n-tls-sys = "0.3.21"
+libc = "0.2.174"
+errno = "0.3"
+s2n-tls = { version = "0.3.21", path = "/home/ubuntu/workspace/s2n-tls/bindings/rust/extended/s2n-tls", features = ["unstable-testing"]}
+s2n-tls-sys = { version = "0.3.21", path = "/home/ubuntu/workspace/s2n-tls/bindings/rust/extended/s2n-tls-sys"}
+

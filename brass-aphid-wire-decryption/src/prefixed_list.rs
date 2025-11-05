@@ -2,7 +2,9 @@ use std::{any::type_name, fmt::Debug, io::ErrorKind};
 
 use anyhow::anyhow;
 
-use brass_aphid_wire_messages::codec::{DecodeByteSource, DecodeValue, EncodeBytesSink, EncodeValue};
+use brass_aphid_wire_messages::codec::{
+    DecodeByteSource, DecodeValue, EncodeBytesSink, EncodeValue,
+};
 
 /// An opaque list of bytes, where the size of the list is prefixed on the wire as `L`.
 ///

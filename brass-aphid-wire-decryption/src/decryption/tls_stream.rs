@@ -1,14 +1,12 @@
-use crate::{
-    decryption::{
-        key_manager::KeyManager, key_space::SecretSpace, stream_decrypter::ConversationState, Mode,
-    },
-
+use crate::decryption::{
+    key_manager::KeyManager, key_space::SecretSpace, stream_decrypter::ConversationState, Mode,
 };
 use brass_aphid_wire_messages::{
-    codec::{DecodeValue, DecodeValueWithContext}, protocol::{
+    codec::{DecodeValue, DecodeValueWithContext},
+    protocol::{
         content_value::{ContentValue, HandshakeMessageValue},
         Alert, ChangeCipherSpec, ContentType, RecordHeader,
-    }
+    },
 };
 use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
 
@@ -52,12 +50,13 @@ use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
 #[derive(Debug)]
 pub struct TlsStream {
     sender: Mode,
-    /// all tx calls are buffered here until there is enough to read a message
+    /// all tx calls are buffered here until there is enough to read a record
     byte_buffer: Vec<u8>,
 
     /// records are buffered here until keys are available to decrypt them
     record_buffer: VecDeque<Vec<u8>>,
 
+    /// text is buffered here until there is enough to read a message
     plaintext_content_stream: VecDeque<u8>,
     plaintext_content_type: ContentType,
     key_space: SecretSpace,

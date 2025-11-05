@@ -1,6 +1,8 @@
 #![no_main]
 
-use brass_aphid_wire_messages::{codec::DecodeValue, protocol::extensions::PresharedKeyClientHello};
+use brass_aphid_wire_messages::{
+    codec::DecodeValue, protocol::extensions::PresharedKeyClientHello,
+};
 use libfuzzer_sys::fuzz_target;
 
 fuzz_target!(|data: &[u8]| {

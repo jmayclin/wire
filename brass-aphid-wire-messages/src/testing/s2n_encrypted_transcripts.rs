@@ -9,7 +9,8 @@ use crate::{
         CertificateTls12ish, ChangeCipherSpec, ClientHello, ContentType, HandshakeMessageHeader,
         HandshakeType, RecordHeader, ServerHello, ServerKeyExchange, SigHashOrScheme,
         SignatureAndHashAlgorithm,
-    }, testing::transcript::TestPairExtension,
+    },
+    testing::transcript::TestPairExtension,
 };
 use s2n_tls::{config::Config, enums::Mode, error::Error, security::Policy, testing::TestPair};
 
@@ -39,17 +40,20 @@ fn tls13_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
     test_pair.client.set_server_name("localhost")?;
 
     test_pair.handshake()?;
-    test_pair.client.poll_send(b"Hello from client!")?;
+    assert!(test_pair
+        .client
+        .poll_send(b"Hello from client!")?
+        .is_ready());
 
     // Receive and verify data on server
     let mut server_buffer = [0u8; 1024];
-    let server_received = test_pair.server.poll_recv(&mut server_buffer)?;
+    let _ = test_pair.server.poll_recv(&mut server_buffer)?;
 
     // Gracefully close the connection
-    test_pair.client.poll_shutdown_send()?;
-    test_pair.server.poll_shutdown_send()?;
-    test_pair.client.poll_recv(&mut [0]);
-    test_pair.server.poll_recv(&mut [0]);
+    assert!(test_pair.client.poll_shutdown_send()?.is_ready());
+    assert!(test_pair.server.poll_shutdown_send()?.is_ready());
+    assert!(test_pair.client.poll_recv(&mut [0]).is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0]).is_ready());
 
     // Verify transcript
     let records = transcript.get_all_records();
@@ -63,7 +67,7 @@ fn tls13_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
 
 fn tls12_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
     // Create client and server configs
-    let config = create_config("default")?;
+    let config = create_config("20190214")?;
 
     // Create TestPair
     let mut test_pair = TestPair::from_config(&config);
@@ -72,17 +76,20 @@ fn tls12_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
     test_pair.client.set_server_name("localhost")?;
 
     test_pair.handshake()?;
-    test_pair.client.poll_send(b"Hello from client!")?;
+    assert!(test_pair
+        .client
+        .poll_send(b"Hello from client!")?
+        .is_ready());
 
     // Receive and verify data on server
     let mut server_buffer = [0u8; 1024];
-    let server_received = test_pair.server.poll_recv(&mut server_buffer)?;
+    let _ = test_pair.server.poll_recv(&mut server_buffer)?;
 
     // Gracefully close the connection
-    test_pair.client.poll_shutdown_send()?;
-    test_pair.server.poll_shutdown_send()?;
-    test_pair.client.poll_recv(&mut [0]);
-    test_pair.server.poll_recv(&mut [0]);
+    assert!(test_pair.client.poll_shutdown_send()?.is_ready());
+    assert!(test_pair.server.poll_shutdown_send()?.is_ready());
+    assert!(test_pair.client.poll_recv(&mut [0]).is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0]).is_ready());
 
     // Verify transcript
     let records = transcript.get_all_records();
@@ -332,7 +339,7 @@ fn tls12() -> std::io::Result<()> {
         let (handshake_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
         assert_eq!(handshake_header.handshake_type, HandshakeType::ClientHello);
 
-        let client_hello = ClientHello::decode_from_exact(buffer)?;
+        ClientHello::decode_from_exact(buffer)?;
     }
 
     // server hello
@@ -366,7 +373,7 @@ fn tls12() -> std::io::Result<()> {
         let (handshake_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
         assert_eq!(handshake_header.handshake_type, HandshakeType::Certificate);
 
-        let certificate = CertificateTls12ish::decode_from_exact(buffer)?;
+        CertificateTls12ish::decode_from_exact(buffer)?;
     }
 
     // server key exchange

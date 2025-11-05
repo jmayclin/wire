@@ -1,12 +1,14 @@
 use std::io::{Read, Write};
 
-use openssl::ssl::{
-    ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode,
-};
-use brass_aphid_wire_messages::protocol::{content_value::ContentValue, ContentType, HandshakeType};
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
     testing::utilities::{get_cert_path, PemType, SigType},
+};
+use brass_aphid_wire_messages::protocol::{
+    content_value::ContentValue, ContentType, HandshakeType,
+};
+use openssl::ssl::{
+    ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode,
 };
 
 #[test]

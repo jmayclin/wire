@@ -1,8 +1,12 @@
-use crate::{
-    decryption::s2n_tls_intercept::{self, PeerIntoS2ntlsInsides},
+use crate::decryption::{
+    s2n_tls_intercept::{self, PeerIntoS2ntlsInsides},
+    Mode,
 };
-use brass_aphid_wire_messages::protocol::content_value::ContentValue;
-use s2n_tls::{enums::Mode, testing::TestPair};
+use brass_aphid_wire_messages::protocol::{
+    content_value::{ContentValue, HandshakeMessageValue},
+    ClientHello, HandshakeType, ServerHello,
+};
+use s2n_tls::testing::TestPair;
 use std::{
     cell::RefCell,
     ffi::c_void,
@@ -11,7 +15,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-struct Transcript {
+#[derive(Debug)]
+pub struct Transcript {
     /// a list of the record sizes sent by each peer
     pub record_transcript: Mutex<Vec<(Mode, usize)>>,
 
@@ -38,6 +43,37 @@ impl Transcript {
 
     pub fn content(&self) -> Vec<(Mode, usize)> {
         self.record_transcript.lock().unwrap().clone()
+    }
+
+    pub fn client_hellos(&self) -> Vec<ClientHello> {
+        let content = self.content_transcript.lock().unwrap();
+        content
+            .iter()
+            .filter_map(|(_, message)| {
+                if let ContentValue::Handshake(HandshakeMessageValue::ClientHello(ch)) = message {
+                    Some(ch.clone())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// panics if there is more than one (TLS 1.3 HRR)
+    pub fn client_hello(&self) -> ClientHello {
+        let client_hellos = self.client_hellos();
+        assert_eq!(client_hellos.len(), 1);
+        client_hellos.first().unwrap().clone()
+    }
+
+    pub fn server_hello(&self) -> ServerHello {
+        let content = self.content_transcript.lock().unwrap();
+        for (_, content) in content.iter() {
+            if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = content {
+                return sh.clone();
+            }
+        }
+        panic!("no server hello. smh, people have no manners");
     }
 }
 

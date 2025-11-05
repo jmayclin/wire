@@ -1,0 +1,1 @@
+This crate functions as a sort of cheap wireshark clone. The process of gathering a PCAP with decrypted keys makes me froth with rage, so this crate tries to do a lot of that stuff at runtime instead.

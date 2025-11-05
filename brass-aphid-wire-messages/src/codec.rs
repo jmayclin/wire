@@ -49,7 +49,10 @@ pub trait DecodeValue: Sized {
         } else {
             Err(std::io::Error::new(
                 ErrorKind::InvalidData,
-                "unexpected data remaining",
+                format!(
+                    "unexpected data remaining: {} bytes to be read",
+                    remaining.len()
+                ),
             ))
         }
     }
