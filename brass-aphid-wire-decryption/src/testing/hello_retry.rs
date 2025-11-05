@@ -3,8 +3,7 @@ use crate::{
     testing::utilities::{s2n_server_config, SigType},
 };
 use brass_aphid_wire_messages::protocol::{
-    content_value::{ContentValue, HandshakeMessageValue},
-    ChangeCipherSpec,
+    ChangeCipherSpec, ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}
 };
 use s2n_tls::testing::TestPair;
 
@@ -70,11 +69,10 @@ fn key_update_request() -> anyhow::Result<()> {
 
     let (sender, content) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
-    if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = content {
-        assert!(sh.is_hello_retry_tls13());
-    } else {
-        panic!("expected server hello");
-    }
+    assert!(matches!(
+        content,
+        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(_)))
+    ));
 
     let (sender, message) = messages.next().unwrap();
     assert_eq!(sender, Mode::Server);
@@ -98,11 +96,10 @@ fn key_update_request() -> anyhow::Result<()> {
     ));
 
     let (sender, content) = messages.next().unwrap();
-    if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = content {
-        assert!(!sh.is_hello_retry_tls13());
-    } else {
-        panic!("expected server hello");
-    }
+    assert!(matches!(
+        content,
+        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::ServerHello(_)))
+    ));
 
     assert_eq!(application_data, vec!["omg, let's be besties".to_string(),]);
 

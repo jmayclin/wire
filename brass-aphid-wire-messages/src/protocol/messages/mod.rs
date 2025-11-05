@@ -116,7 +116,78 @@ impl DecodeValue for ClientHello {
     }
 }
 
-/// ServerHello definition: https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
+/// It is a truth universally acknowledged that it's much more fun to lie about
+/// the type in the TLV specification, and that have a secret little flag on the
+/// inside that actually has to be checked to figure out the real type 😀
+///
+/// They have to be different structs because the internal data structures are
+/// different. E.g. KeyShareServerHello vs KeyShareHelloRetryRequest. This means
+/// that they can _not_ be treated the same.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ServerHelloConfusionMode {
+    ServerHello(ServerHello),
+    HelloRetryRequest(HelloRetryRequest),
+}
+
+impl ServerHelloConfusionMode {
+    pub fn cipher_suite(&self) -> iana::Cipher {
+        match self {
+            ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.cipher_suite,
+            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => hello_retry_request.cipher_suite,
+        }
+    }
+
+    pub fn selected_protocol(&self) -> Protocol {
+        match self {
+            ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.selected_version().unwrap(),
+            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => hello_retry_request.selected_version().unwrap(),
+        }
+
+    }
+}
+
+// We don't impl EncodeValue, because this should only ever by a temporary value
+impl DecodeValue for ServerHelloConfusionMode {
+    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+        let (_protocol, remaining) = Protocol::decode_from(buffer)?;
+        let (random, _remaining) = <[u8; 32]>::decode_from(remaining)?;
+        if random == HelloRetryRequest::RANDOM {
+            let (hrr, remaining) = HelloRetryRequest::decode_from(buffer)?;
+            Ok((ServerHelloConfusionMode::HelloRetryRequest(hrr), remaining))
+        } else {
+            let (sh, remaining) = ServerHello::decode_from(buffer)?;
+            Ok((ServerHelloConfusionMode::ServerHello(sh), remaining))
+        }
+    }
+}
+
+impl EncodeValue for ServerHelloConfusionMode {
+    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+        match self {
+            ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.encode_to(buffer),
+            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => {
+                hello_retry_request.encode_to(buffer)
+            }
+        }
+    }
+}
+
+///= https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
+///> The server will send this message in response to a ClientHello
+///> message to proceed with the handshake if it is able to negotiate an
+///> acceptable set of handshake parameters based on the ClientHello.
+///>
+///> Structure of this message:
+///> ```c
+///> struct {
+///>     ProtocolVersion legacy_version = 0x0303;    /* TLS v1.2 */
+///>     Random random;
+///>     opaque legacy_session_id_echo<0..32>;
+///>     CipherSuite cipher_suite;
+///>     uint8 legacy_compression_method = 0;
+///>     Extension extensions<6..2^16-1>;
+///> } ServerHello;
+///> ```
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct ServerHello {
     pub protocol_version: Protocol,
@@ -167,6 +238,52 @@ impl ServerHello {
 
     pub fn is_hello_retry_tls13(&self) -> bool {
         self.random == TLS13_HELLO_RETRY_RANDOM
+    }
+}
+
+///= https://www.rfc-editor.org/rfc/rfc8446#section-4.1.3
+///> For reasons of backward compatibility with middleboxes (see
+///> Appendix D.4), the HelloRetryRequest message uses the same structure
+///> as the ServerHello, but with Random set to the special value of the
+///> SHA-256 of "HelloRetryRequest":
+///>
+///> CF 21 AD 74 E5 9A 61 11 BE 1D 8C 02 1E 65 B8 91
+///> C2 A2 11 16 7A BB 8C 5E 07 9E 09 E2 C8 A8 33 9C
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct HelloRetryRequest {
+    pub protocol_version: Protocol,
+    pub random: [u8; 32],
+    pub session_id_echo: PrefixedBlob<u8>,
+    /// the cipher suite selected by the server
+    pub cipher_suite: iana::Cipher,
+    pub legacy_compression_method: u8,
+    pub extensions: PrefixedList<Extension, u16>,
+}
+
+impl HelloRetryRequest {
+    pub const RANDOM: [u8; 32] = [
+        207, 33, 173, 116, 229, 154, 97, 17, 190, 29, 140, 2, 30, 101, 184, 145, 194, 162, 17, 22,
+        122, 187, 140, 94, 7, 158, 9, 226, 200, 168, 51, 156,
+    ];
+
+    /// Return the selected version.
+    ///
+    /// This is either populated from the supported_versions extension or the
+    /// protocol_version field.
+    pub fn selected_version(&self) -> std::io::Result<Protocol> {
+        let maybe_supported_versions = self
+            .extensions
+            .list()
+            .iter()
+            .find(|extension| extension.extension_type == ExtensionType::SupportedVersions);
+
+        if let Some(extension) = maybe_supported_versions {
+            let supported_version =
+                SupportedVersionServerHello::decode_from_exact(extension.extension_data.blob())?;
+            Ok(supported_version.selected_version)
+        } else {
+            Ok(self.protocol_version)
+        }
     }
 }
 

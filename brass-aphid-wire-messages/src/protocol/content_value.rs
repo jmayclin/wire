@@ -4,10 +4,7 @@ use crate::{
     codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
     iana::{self, Protocol},
     protocol::{
-        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13,
-        ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished,
-        HandshakeMessageHeader, HandshakeType, KeyUpdate, NewSessionTicketTls13, ServerHello,
-        ServerKeyExchange,
+        Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13, ChangeCipherSpec, ClientHello, ContentType, EncryptedExtensions, Finished, HandshakeMessageHeader, HandshakeType, KeyUpdate, NewSessionTicketTls13, ServerHello, ServerHelloConfusionMode, ServerKeyExchange
     },
 };
 
@@ -43,7 +40,7 @@ impl ContentValue {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum HandshakeMessageValue {
     ClientHello(ClientHello),
-    ServerHello(ServerHello),
+    ServerHelloConfusion(ServerHelloConfusionMode),
     EncryptedExtensions(EncryptedExtensions),
     CertificateTls13(CertificateTls13),
     CertificateTls12ish(CertificateTls12ish),
@@ -59,7 +56,7 @@ impl HandshakeMessageValue {
     pub fn handshake_type(&self) -> HandshakeType {
         match self {
             HandshakeMessageValue::ClientHello(_) => HandshakeType::ClientHello,
-            HandshakeMessageValue::ServerHello(_) => HandshakeType::ServerHello,
+            HandshakeMessageValue::ServerHelloConfusion(_) => HandshakeType::ServerHello,
             HandshakeMessageValue::EncryptedExtensions(_) => HandshakeType::EncryptedExtensions,
             HandshakeMessageValue::CertificateTls13(_) => HandshakeType::Certificate,
             HandshakeMessageValue::CertificateTls12ish(_) => HandshakeType::Certificate,
@@ -91,7 +88,7 @@ impl HandshakeMessageValue {
             }
             HandshakeType::ServerHello => {
                 let (message, buffer) = buffer.decode_value()?;
-                (HandshakeMessageValue::ServerHello(message), buffer)
+                (HandshakeMessageValue::ServerHelloConfusion(message), buffer)
             }
             HandshakeType::NewSessionTicket => {
                 let context = needs_protocol(message_header.handshake_type, protocol)?;

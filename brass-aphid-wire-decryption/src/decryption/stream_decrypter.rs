@@ -3,7 +3,7 @@ use crate::decryption::{
 };
 use brass_aphid_wire_messages::{
     iana::{self, Protocol},
-    protocol::content_value::{ContentValue, HandshakeMessageValue},
+    protocol::{ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}},
 };
 use std::{
     path::PathBuf,
@@ -82,14 +82,15 @@ impl StreamDecrypter {
                 .digest_bytes(&mut self.state, &self.key_manager),
         }?;
 
-        // if the sever sent a hello retry, we need to let the client stream know
+        // if the server sent a hello retry, we need to let the client stream know
         // that it should move the key space forwards
         let hello_retry = content.iter().any(|content| {
-            if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = content {
-                sh.is_hello_retry_tls13()
-            } else {
-                false
-            }
+            matches!(content, ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(_))))
+            // if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(hrr))) = content {
+            //     sh.is_hello_retry_tls13()
+            // } else {
+            //     false
+            // }
         });
 
         if hello_retry {

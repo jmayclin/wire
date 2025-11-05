@@ -120,7 +120,7 @@ fn assert_s2n_decryption_correct(mut messages: Vec<(Mode, ContentValue)>) {
     assert_eq!(sender, Mode::Server);
     assert!(matches!(
         message,
-        ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
+        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(_))
     ));
 
     let (sender, message) = messages.next().unwrap();

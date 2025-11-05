@@ -4,8 +4,7 @@ use crate::decryption::{
 use brass_aphid_wire_messages::{
     codec::{DecodeValue, DecodeValueWithContext},
     protocol::{
-        content_value::{ContentValue, HandshakeMessageValue},
-        Alert, ChangeCipherSpec, ContentType, RecordHeader,
+        Alert, ChangeCipherSpec, ContentType, RecordHeader, ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}
     },
 };
 use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
@@ -243,8 +242,11 @@ impl TlsStream {
                     self.needs_next_key_space = true;
                 }
                 // server hello is end of server plaintext
-                if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(sh)) = &value {
-                    if !sh.is_hello_retry_tls13() {
+                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(sh)) = &value {
+                    // We only need the next key space if this is _actually_ the 
+                    // server hello. If it's a HelloRetryRequest then we won't be
+                    // encrypting things just yet.
+                    if matches!(sh, ServerHelloConfusionMode::ServerHello(_)) {
                         self.needs_next_key_space = true;
                     }
                 }
@@ -276,11 +278,15 @@ impl TlsStream {
                 if let ContentValue::Handshake(HandshakeMessageValue::ClientHello(s)) = &value {
                     state.client_random = Some(s.random.to_vec());
                 }
-                if let ContentValue::Handshake(HandshakeMessageValue::ServerHello(s)) = &value {
+                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(s)) = &value {
                     // Even if it was a hello retry, this is fine. Because the HRR still
                     // contains the actual selected parameters.
-                    state.selected_cipher = Some(s.cipher_suite);
-                    state.selected_protocol = Some(s.selected_version()?);
+                    // TODO: I don't like this. I think I should only be doing this 
+                    // on the actual ServerHello, this branching is confusing.
+                    // Actually, maybe I do need to do this because the HRR is a 
+                    // TLS 1.3 only message?
+                    state.selected_cipher = Some(s.cipher_suite());
+                    state.selected_protocol = Some(s.selected_protocol());
                     tracing::info!("setting cipher and selected version: {state:?}");
                 }
 
