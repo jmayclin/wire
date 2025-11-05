@@ -18,7 +18,7 @@ tracing = "0.1.40"
 strum = { version = "0.25", features = ["derive"] }
 
 # Internal dependencies
-brass-aphid-wire-macros = { path = "../brass-aphid-wire-macros" }
+brass-aphid-wire-macros = { version = "0.0.1", path = "../brass-aphid-wire-macros" }
 anyhow = "1.0.98"
 hex = "0.4.3"
 
