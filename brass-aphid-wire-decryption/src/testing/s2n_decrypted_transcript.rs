@@ -31,21 +31,21 @@ fn s2n_server_test() -> anyhow::Result<()> {
 
     let mut message_buffer = [0; b"i am the client".len()];
 
-    test_pair.client.poll_send(b"i am the client");
-    test_pair.server.poll_recv(&mut message_buffer);
+    assert!(test_pair.client.poll_send(b"i am the client").is_ready());
+    assert!(test_pair.server.poll_recv(&mut message_buffer).is_ready());
 
-    test_pair.server.poll_send(b"i am the server");
-    test_pair.client.poll_recv(&mut message_buffer);
+    assert!(test_pair.server.poll_send(b"i am the server").is_ready());
+    assert!(test_pair.client.poll_recv(&mut message_buffer).is_ready());
 
     // the complicated shutdown dance is required so that the client and server
     // are always reading the CloseNotify in the same order. While this normally
     // doesn't matter, we want to reuse these assertions for both client and
     // server decryption.
-    test_pair.client.poll_shutdown_send();
-    test_pair.server.poll_recv(&mut [0]);
+    assert!(test_pair.client.poll_shutdown_send().is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0]).is_ready());
 
-    test_pair.server.poll_shutdown_send();
-    test_pair.client.poll_recv(&mut [0]);
+    assert!(test_pair.server.poll_shutdown_send().is_ready());
+    assert!(test_pair.client.poll_recv(&mut [0]).is_ready());
 
     let messages = stream_decrypter.decrypter.transcript.clone();
     assert_s2n_decryption_correct(messages.lock().unwrap().clone());
@@ -76,21 +76,21 @@ fn s2n_client_test() -> anyhow::Result<()> {
 
     let mut message_buffer = [0; b"i am the client".len()];
 
-    test_pair.client.poll_send(b"i am the client");
-    test_pair.server.poll_recv(&mut message_buffer);
+    assert!(test_pair.client.poll_send(b"i am the client").is_ready());
+    assert!(test_pair.server.poll_recv(&mut message_buffer).is_ready());
 
-    test_pair.server.poll_send(b"i am the server");
-    test_pair.client.poll_recv(&mut message_buffer);
+    assert!(test_pair.server.poll_send(b"i am the server").is_ready());
+    assert!(test_pair.client.poll_recv(&mut message_buffer).is_ready());
 
     // the complicated shutdown dance is required so that the client and server
     // are always reading the CloseNotify in the same order. While this normally
     // doesn't matter, we want to reuse these assertions for both client and
     // server decryption.
-    test_pair.client.poll_shutdown_send();
-    test_pair.server.poll_recv(&mut [0]);
+    assert!(test_pair.client.poll_shutdown_send().is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0]).is_ready());
 
-    test_pair.server.poll_shutdown_send();
-    test_pair.client.poll_recv(&mut [0]);
+    assert!(test_pair.server.poll_shutdown_send().is_ready());
+    assert!(test_pair.client.poll_recv(&mut [0]).is_ready());
 
     let messages = stream_decrypter
         .decrypter

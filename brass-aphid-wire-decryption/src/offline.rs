@@ -4,7 +4,7 @@
 
 use std::{io::Read, path::Path};
 
-use byteorder::{ByteOrder, ReadBytesExt};
+use byteorder::ReadBytesExt;
 
 use crate::{
     decryption::{key_manager::KeyManager, Mode},

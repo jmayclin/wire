@@ -85,7 +85,7 @@ fn single_message_many_records() -> anyhow::Result<()> {
             stream.accept().unwrap();
             stream.do_handshake().unwrap();
             let mut buffer = [0; MESSAGE.len()];
-            stream.read_exact(&mut buffer);
+            stream.read_exact(&mut buffer).unwrap();
             let shutdown_state = stream.shutdown().unwrap();
             if shutdown_state != ShutdownResult::Received {
                 let state = stream.shutdown().unwrap();
@@ -99,7 +99,7 @@ fn single_message_many_records() -> anyhow::Result<()> {
                 let decrypter = decrypting_pipe.decrypter.transcript.clone();
                 let mut stream = SslStream::new(client, decrypting_pipe).unwrap();
                 stream.connect().unwrap();
-                stream.write_all(MESSAGE);
+                stream.write_all(MESSAGE).unwrap();
                 let shutdown_state = stream.shutdown().unwrap();
                 if shutdown_state != ShutdownResult::Received {
                     let state = stream.shutdown().unwrap();

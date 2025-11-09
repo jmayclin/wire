@@ -137,7 +137,7 @@ pub struct SupportedGroups {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-struct ServerSupportedVersions {
+pub struct ServerSupportedVersions {
     versions: PrefixedList<Protocol, u8>,
 }
 

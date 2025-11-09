@@ -4,7 +4,8 @@ use crate::decryption::{
 use brass_aphid_wire_messages::{
     codec::{DecodeValue, DecodeValueWithContext},
     protocol::{
-        Alert, ChangeCipherSpec, ContentType, RecordHeader, ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}
+        content_value::{ContentValue, HandshakeMessageValue},
+        Alert, ChangeCipherSpec, ContentType, RecordHeader, ServerHelloConfusionMode,
     },
 };
 use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
@@ -48,6 +49,9 @@ use std::{collections::VecDeque, fmt::Debug, io::ErrorKind};
 /// think the answer is no. And if the answer is yes then 😭.
 #[derive(Debug)]
 pub struct TlsStream {
+    /// The identity of this TLS Stream.
+    ///
+    /// E.g. `Mode::Client` means that this is the stream sent by the client.
     sender: Mode,
     /// all tx calls are buffered here until there is enough to read a record
     byte_buffer: Vec<u8>,
@@ -58,10 +62,9 @@ pub struct TlsStream {
     /// text is buffered here until there is enough to read a message
     plaintext_content_stream: VecDeque<u8>,
     plaintext_content_type: ContentType,
+    /// the current encryption level of the connection. E.g. "Plaintext" or "Application"
     key_space: SecretSpace,
     needs_next_key_space: bool,
-    // key space
-    // wants new key stream
 }
 
 impl TlsStream {
@@ -81,7 +84,13 @@ impl TlsStream {
     /// Set `need_next_key_space` to false
     ///
     /// While the "sender" streams are almost entirely independent, that get's broken
-    /// in the event of a hello retry. We need a way for the server stream to tell
+    /// in the event of a hello retry.
+    ///
+    /// Normally, when the Server sends a ServerHello this means that the next message
+    /// will be the EncryptedExtension (which the TLS Stream will need to decrypt).
+    ///
+    /// But if it was a
+    /// We need a way for the server stream to tell
     /// the client stream that there's actually another client hello on the way.
     pub fn suppress_next_key_state(&mut self) {
         debug_assert_eq!(self.sender, Mode::Client);
@@ -97,7 +106,7 @@ impl TlsStream {
     ///
     /// This method will not do any decryption, but will try and assemble existing
     /// data into complete records.
-    pub fn feed_bytes(&mut self, data: &[u8]) -> std::io::Result<()> {
+    pub fn feed_bytes(&mut self, data: &[u8]) {
         // first buffer into byte buffer.
         tracing::info!(
             "feeding {:?} bytes, record buffer currently {}",
@@ -117,8 +126,6 @@ impl TlsStream {
         }
 
         tracing::info!("record buffer now {}", self.record_buffer.len());
-
-        Ok(())
     }
 
     /// Attempt to decrypt available bytes.
@@ -230,31 +237,26 @@ impl TlsStream {
                 };
 
                 tracing::trace!("from plaintext stream: {value:?}");
-                // TODO: handle hello retries. Maybe a method that the TlsStream
-                // can call to reset the key space? Prevent the "next key space"
-                // thing?
 
                 // client hello is end of client plaintext
                 if matches!(
                     value,
                     ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))
                 ) {
+                    // hmm, is there some way to check if the next mesage
                     self.needs_next_key_space = true;
                 }
                 // server hello is end of server plaintext
-                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(sh)) = &value {
-                    // We only need the next key space if this is _actually_ the 
-                    // server hello. If it's a HelloRetryRequest then we won't be
-                    // encrypting things just yet.
-                    if matches!(sh, ServerHelloConfusionMode::ServerHello(_)) {
-                        self.needs_next_key_space = true;
-                    }
+                // important: HelloRetryRequest is modelled as a totally different
+                // struct enum.
+                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+                    ServerHelloConfusionMode::ServerHello(_),
+                )) = &value
+                {
+                    // important: this is why we represent the Hello Retry as a
+                    // different message
+                    self.needs_next_key_space = true;
                 }
-                // if matches!(
-                //     value,
-                //     ContentValue::Handshake(HandshakeMessageValue::ServerHello(_))
-                // ) {
-                // }
                 // server finished is end of server handshake space
                 // client finished is end of client handshake space
                 if matches!(
@@ -278,31 +280,23 @@ impl TlsStream {
                 if let ContentValue::Handshake(HandshakeMessageValue::ClientHello(s)) = &value {
                     state.client_random = Some(s.random.to_vec());
                 }
-                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(s)) = &value {
+                if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+                    ServerHelloConfusionMode::ServerHello(sh),
+                )) = &value
+                {
                     // Even if it was a hello retry, this is fine. Because the HRR still
                     // contains the actual selected parameters.
-                    // TODO: I don't like this. I think I should only be doing this 
+                    // TODO: I don't like this. I think I should only be doing this
                     // on the actual ServerHello, this branching is confusing.
-                    // Actually, maybe I do need to do this because the HRR is a 
+                    // Actually, maybe I do need to do this because the HRR is a
                     // TLS 1.3 only message?
-                    state.selected_cipher = Some(s.cipher_suite());
-                    state.selected_protocol = Some(s.selected_protocol());
+                    state.selected_cipher = Some(sh.cipher_suite);
+                    state.selected_protocol = Some(sh.selected_version().unwrap());
                     tracing::info!("setting cipher and selected version: {state:?}");
                 }
 
                 content.push(value);
             }
-            // while let Some(value) = Self::plaintext_stream_message(
-            //     self.plaintext_content_type,
-            //     &mut self.plaintext_content_stream,
-            //     state,
-            // )
-            // .map_err(|e| {
-            //     tracing::error!("{e}");
-            //     e
-            // })? {
-
-            // }
         }
     }
 

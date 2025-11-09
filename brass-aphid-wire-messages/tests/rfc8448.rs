@@ -138,7 +138,7 @@ fn test_server_hello_1rtt() {
     assert_eq!(server_hello.extensions.list().len(), 2);
 
     // Find and check the key share extension
-    let key_share = server_hello
+    server_hello
         .extensions
         .list()
         .iter()

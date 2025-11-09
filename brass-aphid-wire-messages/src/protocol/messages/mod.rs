@@ -133,16 +133,21 @@ impl ServerHelloConfusionMode {
     pub fn cipher_suite(&self) -> iana::Cipher {
         match self {
             ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.cipher_suite,
-            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => hello_retry_request.cipher_suite,
+            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => {
+                hello_retry_request.cipher_suite
+            }
         }
     }
 
     pub fn selected_protocol(&self) -> Protocol {
         match self {
-            ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.selected_version().unwrap(),
-            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => hello_retry_request.selected_version().unwrap(),
+            ServerHelloConfusionMode::ServerHello(server_hello) => {
+                server_hello.selected_version().unwrap()
+            }
+            ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => {
+                hello_retry_request.selected_version().unwrap()
+            }
         }
-
     }
 }
 
@@ -190,6 +195,9 @@ impl EncodeValue for ServerHelloConfusionMode {
 ///> ```
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct ServerHello {
+    /// remember TLS hates you, and this field is for TLS 1.3.
+    ///
+    /// Starting with TLS 1.3, the _real_ version is sent as an extension.
     pub protocol_version: Protocol,
     pub random: [u8; 32],
     pub session_id_echo: PrefixedBlob<u8>,

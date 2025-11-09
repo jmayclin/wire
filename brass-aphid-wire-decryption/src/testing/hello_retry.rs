@@ -3,7 +3,8 @@ use crate::{
     testing::utilities::{s2n_server_config, SigType},
 };
 use brass_aphid_wire_messages::protocol::{
-    ChangeCipherSpec, ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}
+    content_value::{ContentValue, HandshakeMessageValue},
+    ChangeCipherSpec, ServerHelloConfusionMode,
 };
 use s2n_tls::testing::TestPair;
 
@@ -29,18 +30,21 @@ fn key_update_request() -> anyhow::Result<()> {
 
     test_pair.handshake().unwrap();
 
-    test_pair.client.poll_send(b"omg, let's be besties");
-    test_pair.server.poll_recv(&mut [0; 100]);
+    assert!(test_pair
+        .client
+        .poll_send(b"omg, let's be besties")
+        .is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0; 100]).is_ready());
 
     // the complicated shutdown dance is required so that the client and server
     // are always reading the CloseNotify in the same order. While this normally
     // doesn't matter, we want to reuse these assertions for both client and
     // server decryption.
-    test_pair.client.poll_shutdown_send();
-    test_pair.server.poll_recv(&mut [0]);
+    assert!(test_pair.client.poll_shutdown_send().is_ready());
+    assert!(test_pair.server.poll_recv(&mut [0]).is_ready());
 
-    test_pair.server.poll_shutdown_send();
-    test_pair.client.poll_recv(&mut [0]);
+    assert!(test_pair.server.poll_shutdown_send().is_ready());
+    assert!(test_pair.client.poll_recv(&mut [0]).is_ready());
 
     let mut messages = stream_decrypter
         .decrypter
@@ -71,7 +75,9 @@ fn key_update_request() -> anyhow::Result<()> {
     assert_eq!(sender, Mode::Server);
     assert!(matches!(
         content,
-        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(_)))
+        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+            ServerHelloConfusionMode::HelloRetryRequest(_)
+        ))
     ));
 
     let (sender, message) = messages.next().unwrap();
@@ -98,7 +104,9 @@ fn key_update_request() -> anyhow::Result<()> {
     let (sender, content) = messages.next().unwrap();
     assert!(matches!(
         content,
-        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::ServerHello(_)))
+        ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+            ServerHelloConfusionMode::ServerHello(_)
+        ))
     ));
 
     assert_eq!(application_data, vec!["omg, let's be besties".to_string(),]);

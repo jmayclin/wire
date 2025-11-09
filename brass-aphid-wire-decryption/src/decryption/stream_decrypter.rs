@@ -3,13 +3,19 @@ use crate::decryption::{
 };
 use brass_aphid_wire_messages::{
     iana::{self, Protocol},
-    protocol::{ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}},
+    protocol::{
+        content_value::{ContentValue, HandshakeMessageValue},
+        ServerHelloConfusionMode,
+    },
 };
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
 };
 
+/// The conversation state tracks the context necessary to decrypt the connection.
+///
+/// For example, we need to know the cipher to know how to decrypt encrypted records.
 #[derive(Debug, Default, Clone)]
 pub struct ConversationState {
     pub client_random: Option<Vec<u8>>,
@@ -20,6 +26,10 @@ pub struct ConversationState {
 #[derive(Debug)]
 pub struct StreamDecrypter {
     pub state: ConversationState,
+    /// The key_manager which holds all of the key log entries from the connection.
+    ///
+    /// The Key Manager is associated with a single config, so secrets must be retrieved
+    /// with the connection ID (client hello random).
     key_manager: KeyManager,
     pub transcript: Arc<Mutex<Vec<(Mode, ContentValue)>>>,
     pub client_stream: TlsStream,
@@ -39,9 +49,9 @@ impl StreamDecrypter {
 
     /// Record a transmitted bytes.
     ///
-    /// To record received bytes, this method can just be called with a swapped
-    /// mode. E.g. Receiving bytes from the client can be recorded as a client
-    /// transmissions.
+    /// Received bytes should be recorded as transmissions of the peer.
+    ///
+    ///
     pub fn record_tx(&mut self, data: &[u8], sender: Mode) {
         match sender {
             Mode::Client => self.client_stream.feed_bytes(data),
@@ -84,13 +94,15 @@ impl StreamDecrypter {
 
         // if the server sent a hello retry, we need to let the client stream know
         // that it should move the key space forwards
+        // TODO: could we remove the context from this, and just peek at the records
+        // in the client
         let hello_retry = content.iter().any(|content| {
-            matches!(content, ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(_))))
-            // if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(hrr))) = content {
-            //     sh.is_hello_retry_tls13()
-            // } else {
-            //     false
-            // }
+            matches!(
+                content,
+                ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+                    ServerHelloConfusionMode::HelloRetryRequest(_)
+                ))
+            )
         });
 
         if hello_retry {

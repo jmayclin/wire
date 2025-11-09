@@ -3,7 +3,8 @@ use crate::decryption::{
     Mode,
 };
 use brass_aphid_wire_messages::protocol::{
-    ClientHello, HandshakeType, HelloRetryRequest, ServerHello, ServerHelloConfusionMode, content_value::{ContentValue, HandshakeMessageValue}
+    content_value::{ContentValue, HandshakeMessageValue},
+    ClientHello, HelloRetryRequest, ServerHello, ServerHelloConfusionMode,
 };
 use s2n_tls::testing::TestPair;
 use std::{
@@ -20,7 +21,7 @@ pub struct Transcript {
     pub record_transcript: Mutex<Vec<(Mode, usize)>>,
 
     /// a list of the content sent by each peer
-    /// TODO: why are these mutexes? I think the vast majority of the time 
+    /// TODO: why are these mutexes? I think the vast majority of the time
     pub content_transcript: Mutex<Vec<(Mode, ContentValue)>>,
 }
 
@@ -69,7 +70,10 @@ impl Transcript {
     pub fn server_hello(&self) -> ServerHello {
         let content = self.content_transcript.lock().unwrap();
         for (_, content) in content.iter() {
-            if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::ServerHello(sh))) = content {
+            if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+                ServerHelloConfusionMode::ServerHello(sh),
+            )) = content
+            {
                 return sh.clone();
             }
         }
@@ -79,7 +83,10 @@ impl Transcript {
     pub fn hello_retry_request(&self) -> Option<HelloRetryRequest> {
         let content = self.content_transcript.lock().unwrap();
         for (_, content) in content.iter() {
-            if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::HelloRetryRequest(hrr))) = content {
+            if let ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(
+                ServerHelloConfusionMode::HelloRetryRequest(hrr),
+            )) = content
+            {
                 return Some(hrr.clone());
             }
         }
