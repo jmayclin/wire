@@ -9,7 +9,7 @@ use brass_aphid_wire_messages::protocol::{
 use s2n_tls::testing::TestPair;
 
 #[test]
-fn key_update_request() -> anyhow::Result<()> {
+fn hello_retry_request() -> anyhow::Result<()> {
     let key_manager = KeyManager::new();
 
     let client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();
@@ -23,9 +23,10 @@ fn key_update_request() -> anyhow::Result<()> {
         .set_server_name("omg💅heyyy✨bestie💖lets👪do💌tls🔒")
         .unwrap();
 
+    // steal the send & recv callbacks from the s2n-tls connection.
     let decrypting_stream = DecryptingPipe::s2n_tls_decrypter(key_manager, &mut test_pair.server);
-
     let stream_decrypter = Box::new(decrypting_stream);
+    // override the existing send & recv callbacks to use our decrypting pipe instead.
     DecryptingPipe::enable_s2n_tls_decryption(&stream_decrypter, &mut test_pair.server);
 
     test_pair.handshake().unwrap();
