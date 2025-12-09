@@ -7,9 +7,7 @@ use s2n_tls::testing::TestPair;
 
 #[test]
 fn key_update_request() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_max_level(tracing::Level::TRACE)
-        .init();
+
 
     let key_manager = KeyManager::new();
 
