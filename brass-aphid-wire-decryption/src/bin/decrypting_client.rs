@@ -3,10 +3,14 @@ use std::{io::Read, time::Duration};
 use brass_aphid_wire_decryption::decryption::{key_manager::KeyManager, DecryptingPipe};
 use openssl::ssl::{Ssl, SslContext, SslMethod, SslStream};
 
-const DOMAIN: &str = "www.amazon.com";
+const DOMAIN: &str = "access-log-test-balancer-1950796398.us-west-2.elb.amazonaws.com";
 const PORT: u16 = 443;
 
 fn main() -> anyhow::Result<()> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::TRACE)
+        .init();
+
     // first we create a KeyManager. Most TLS implementation will set the key-logging
     // callback per-config. The KeyManager provides that callback.
     let key_manager = KeyManager::new();

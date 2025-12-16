@@ -3,7 +3,7 @@ members = [
     "brass-aphid-wire-messages", 
     "brass-aphid-wire-decryption",
     "brass-aphid-wire-macros",
-    "brass-aphid-wire-messages/fuzz", "capability-compendium",
+    "brass-aphid-wire-messages/fuzz", "capability-compendium", "pcap-analysis",
 ]
 
 [workspace.package]
