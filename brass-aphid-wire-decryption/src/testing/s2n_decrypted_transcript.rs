@@ -23,7 +23,6 @@ fn s2n_server_test() -> anyhow::Result<()> {
         .unwrap();
 
     let decrypting_stream = DecryptingPipe::s2n_tls_decrypter(key_manager, &mut test_pair.server);
-
     let stream_decrypter = Box::new(decrypting_stream);
     DecryptingPipe::enable_s2n_tls_decryption(&stream_decrypter, &mut test_pair.server);
 

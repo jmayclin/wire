@@ -37,5 +37,9 @@ openssl-sys = "0.9.109"
 sha2 = "0.10.9"
 hkdf = "0.12.4"
 
+[dev-dependencies]
+tokio = { version = "1.48.0", features = ["full"] }
+s2n-tls-tokio = { version = "0.3.21", path = "/home/ubuntu/workspace/s2n-tls/bindings/rust/extended/s2n-tls-tokio"}
+
 [build-dependencies]
 serde_with = "3.12.0"

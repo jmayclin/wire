@@ -1,6 +1,5 @@
 use std::{
-    ffi::{c_int, c_void},
-    io::ErrorKind,
+    any::type_name, ffi::{c_int, c_void}, io::ErrorKind
 };
 
 use s2n_tls::connection::Connection as S2NConnection;
@@ -67,10 +66,10 @@ impl std::io::Write for InterceptedSendCallback {
         let res = unsafe { self.send_cb.unwrap()(self.send_ctx, buf.as_ptr(), buf.len() as u32) };
         if res == -1 {
             // TODO: check the errno here
-            Err(std::io::Error::new(
-                ErrorKind::WouldBlock,
-                "from intercepted",
-            ))
+            let errno = errno::errno().0;
+            let err = std::io::Error::from_raw_os_error(errno);
+            tracing::debug!("error from intercepted write callback: {err:?}");
+            Err(err)
         } else {
             Ok(res as usize)
         }
@@ -94,10 +93,10 @@ impl std::io::Read for InterceptedRecvCallback {
             unsafe { self.recv_cb.unwrap()(self.recv_ctx, buf.as_mut_ptr(), buf.len() as u32) };
         if res == -1 {
             // TODO: check errno here
-            Err(std::io::Error::new(
-                ErrorKind::WouldBlock,
-                "from intercepted",
-            ))
+            let errno = errno::errno().0;
+            let err = std::io::Error::from_raw_os_error(errno);
+            tracing::debug!("error from intercepted read callback: {err:?}");
+            Err(err)
         } else {
             Ok(res as usize)
         }
@@ -144,20 +143,35 @@ pub(crate) unsafe extern "C" fn generic_send_cb<T: std::io::Write>(
 ) -> c_int {
     let context: &mut T = &mut *(context as *mut T);
     let data = core::slice::from_raw_parts(data, len as _);
-    let bytes_written = context.write(data).unwrap();
-    bytes_written as c_int
+    match context.write(data) {
+        Ok(bytes_written) => bytes_written as i32,
+        Err(err) => {
+            match err.raw_os_error() {
+                Some(os_err) => {
+                    tracing::debug!("setting errno for {err}");
+                    errno::set_errno(errno::Errno(os_err))
+                }
+                None => {
+                    tracing::warn!("Err {err} doesn't have a corresponding os err 😬")
+                }
+            }
+            -1
+        },
+    }
 }
 
 // This callback can be used where ctx is `Box<T: Read>`
 pub(crate) unsafe extern "C" fn generic_recv_cb<T: std::io::Read>(
-    context: *mut c_void,
+    raw_context: *mut c_void,
     data: *mut u8,
     len: u32,
 ) -> c_int {
-    // we need to double box because Box<dyn Write> is a fat pointer (16 bytes)
-    let context: &mut T = &mut *(context as *mut T);
+    let context: &mut T = &mut *(raw_context as *mut T);
     let data = core::slice::from_raw_parts_mut(data, len as _);
-    match context.read(data) {
+    tracing::trace!("generic recv cb {:?} into: buffer of size {}", type_name::<T>(), data.len());
+    let read_result = context.read(data);
+    tracing::trace!("generic recv cb: read result: {read_result:?}");
+    match read_result {
         Ok(len) => {
             if len == 0 {
                 // returning a length of 0 indicates a channel close (e.g. a
@@ -171,11 +185,16 @@ pub(crate) unsafe extern "C" fn generic_recv_cb<T: std::io::Read>(
             }
         }
         Err(err) => {
-            if err.kind() == ErrorKind::WouldBlock {
-                -1
-            } else {
-                panic!("unrecognized error {err:?}")
+            match err.raw_os_error() {
+                Some(os_err) => {
+                    tracing::debug!("setting errno for {err}");
+                    errno::set_errno(errno::Errno(os_err))
+                }
+                None => {
+                    tracing::warn!("Err {err} doesn't have a corresponding os err 😬")
+                }
             }
+            -1
         }
     }
 }

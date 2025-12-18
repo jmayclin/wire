@@ -14,5 +14,5 @@ mod s2n_decrypted_transcript;
 mod hello_retry;
 mod key_update;
 mod messages_across_records;
-
+mod plaintext_alert_during_handshake;
 pub mod utilities;

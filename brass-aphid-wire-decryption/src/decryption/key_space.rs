@@ -231,18 +231,38 @@ impl SecretSpace {
         let remaining = record;
         let (outer_record_header, remaining) = RecordHeader::decode_from(remaining)?;
         tracing::debug!("Deframing {outer_record_header:?}");
-        if outer_record_header.content_type == ContentType::ChangeCipherSpec {
-            // don't attempt to decrypt, this is it's own weird little thing
+        // handle plaintext items which might occur in different places
+        // CCS -> TLS adores complexity, so this is included to make my parsing
+        //        more complicated.
+        // Alert -> we might receive a TLS alert in plaintext even during an
+        //          encrypted space.
+        if matches!(
+            outer_record_header.content_type,
+            ContentType::ChangeCipherSpec | ContentType::Alert
+        ) {
             return Ok((outer_record_header.content_type, remaining.to_vec()));
         }
 
         match self {
             SecretSpace::Plaintext => Ok((outer_record_header.content_type, remaining.to_vec())),
             SecretSpace::Handshake(key_space) | SecretSpace::Application(key_space, _) => {
-                assert!(outer_record_header.content_type == ContentType::ApplicationData);
                 let mut plaintext = key_space.decrypt_record(&outer_record_header, remaining);
 
-                // TODO explain wth is happening here.
+                // In TLS 1.3, records are "obfuscated". The plaintext record header
+                // contains a fake content type set to "Application Data". To determine
+                // the real content type you must
+                // 1. decrypt the record
+                // 2. remove all padding (0's) from the end of the record
+                // 3. the non-zero byte at the end of the decrypted record content
+                //    is the "real" content type.
+                // "But James!" you say. "That's so complicated. Why wouldn't they
+                // just add another header inside the plaintext? That way you
+                // don't have to try and parse backwards."
+                //
+                // well dear reader, I completely agree, but you are forgetting
+                // the primary point that "TLS Adores Complexity"
+
+                // remove the padding
                 let mut padding = 0;
                 while plaintext.ends_with(&[0]) {
                     padding += 1;
@@ -251,16 +271,16 @@ impl SecretSpace {
 
                 // TODO: is it possible to send a record which is entirely padding?
 
-                let (content_type, _buffer) =
-                    ContentType::decode_from(&plaintext[plaintext.len() - 1..])?;
-                // drop the content byte from the end
+                // parse the content type from the last byte
+                let content_type =
+                    ContentType::decode_from_exact(&plaintext[plaintext.len() - 1..])?;
                 plaintext.pop();
 
-                println!("InnerRecordHeader {{");
-                println!("    content_type: {content_type:?}");
-                println!("    inner_length: {}", plaintext.len());
-                println!("    padding: {padding}");
-                println!("}}");
+                tracing::trace!("InnerRecordHeader {{");
+                tracing::trace!("    content_type: {content_type:?}");
+                tracing::trace!("    inner_length: {}", plaintext.len());
+                tracing::trace!("    padding: {padding}");
+                tracing::trace!("}}");
                 Ok((content_type, plaintext))
             }
         }

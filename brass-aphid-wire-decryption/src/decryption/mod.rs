@@ -51,6 +51,9 @@ pub struct DecryptingPipe<T> {
 
 impl DecryptingPipe<ArchaicCPipe> {
     /// configure a decrypting pipe for an s2n-tls connection.
+    /// 
+    /// This will steal the currently configure send/recv callbacks and wrap them
+    /// in a pipe that the decrypter will use to populate the data
     pub fn s2n_tls_decrypter(
         key_manager: KeyManager,
         connection: &mut s2n_tls::connection::Connection,
@@ -124,7 +127,7 @@ impl<T: std::io::Read> std::io::Read for DecryptingPipe<T> {
         }
 
         let read = self.pipe.read(buf)?;
-        tracing::trace!("read {read} bytes");
+        tracing::trace!("DecryptingPipe read {read} bytes");
 
         let peer = self.identity.unwrap().peer();
 
@@ -149,7 +152,7 @@ impl<T: std::io::Write> std::io::Write for DecryptingPipe<T> {
         }
 
         let written = self.pipe.write(buf)?;
-        tracing::trace!("wrote {written} bytes");
+        tracing::trace!("DecryptingPipe wrote {written} bytes");
 
         let identity = self.identity.unwrap();
 
