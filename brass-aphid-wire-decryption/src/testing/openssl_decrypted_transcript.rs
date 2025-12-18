@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
 
 use crate::{
-    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
-    testing::utilities::{get_cert_path, PemType, SigType},
+    decryption::{DecryptingPipe, Mode, key_manager::KeyManager},
+    testing::utilities::{ContentValueTestEquality, PemType, SigType, get_cert_path},
 };
 use brass_aphid_wire_messages::protocol::{
     content_value::ContentValue, ContentType, HandshakeType,
@@ -84,103 +84,37 @@ fn openssl_server_test() -> anyhow::Result<()> {
 
     // std::fs::write("resources/traces/openssl_3_5.log", format!("{transcript:#?}"));
 
-    let mut messages = transcript.drain(..);
+    // validate transcript
+    {
+        let expected_app_data = ContentValue::ApplicationData(MESSAGE.to_vec());
+        let expected_transcript: Vec<(Mode, &dyn ContentValueTestEquality)> = vec![
+            // handshake starts
+            (Mode::Client, &HandshakeType::ClientHello),
+            (Mode::Server, &HandshakeType::ServerHello),
+            (Mode::Server, &ContentType::ChangeCipherSpec),
+            (Mode::Server, &HandshakeType::EncryptedExtensions),
+            (Mode::Server, &HandshakeType::Certificate),
+            (Mode::Server, &HandshakeType::CertificateVerify),
+            (Mode::Server, &HandshakeType::Finished),
+            (Mode::Client, &ContentType::ChangeCipherSpec),
+            (Mode::Client, &HandshakeType::Finished),
+            // handshake finished, now application data
+            (Mode::Client, &expected_app_data),
+            (Mode::Client, &ContentType::Alert),
+            // client's first read since finishing the handshake
+            (Mode::Server, &HandshakeType::NewSessionTicket),
+            (Mode::Server, &HandshakeType::NewSessionTicket),
+            (Mode::Server, &ContentType::Alert),
+        ];
 
-    // handshake starts
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Client);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::ClientHello
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::ServerHello
-    );
-
-    // encrypted data
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
-
-    // encrypted data
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::EncryptedExtensions
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::Certificate
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::CertificateVerify
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::Finished
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Client);
-    assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Client);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::Finished
-    );
-
-    // handshake finished -> application data
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Client);
-    if let ContentValue::ApplicationData(data) = message {
-        assert_eq!(&data, MESSAGE);
-    } else {
-        panic!("unexpected message");
+        let mut messages = transcript.drain(..);
+        for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
+            let (actual_sender, actual_content) = messages.next().unwrap();
+            assert_eq!(actual_sender, sender);
+            assert!(content.same_as(actual_content));
+        }
+        assert!(messages.next().is_none());
     }
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Client);
-    assert_eq!(message.content_type(), ContentType::Alert);
-
-    // client's first read since finishing the handshake
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::NewSessionTicket
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(
-        message.as_handshake().handshake_type(),
-        HandshakeType::NewSessionTicket
-    );
-
-    let (sender, message) = messages.next().unwrap();
-    assert_eq!(sender, Mode::Server);
-    assert_eq!(message.content_type(), ContentType::Alert);
-
-    assert!(messages.next().is_none());
 
     Ok(())
 }

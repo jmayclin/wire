@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
-    testing::utilities::{get_cert_path, PemType, SigType},
+    testing::utilities::{get_cert_path, ContentValueTestEquality, PemType, SigType},
 };
 use brass_aphid_wire_messages::protocol::{ContentType, HandshakeType};
 use rustls::{
@@ -111,93 +111,32 @@ fn rustls_client_test() -> anyhow::Result<()> {
 
     // validate server auth
     {
+        // the message order is janky because of rustls buffering/key availability
+        // stuff
+        let expected_transcript: Vec<(Mode, &dyn ContentValueTestEquality)> = vec![
+            // handshake starts
+            (Mode::Client, &HandshakeType::ClientHello),
+            (Mode::Server, &HandshakeType::ServerHello),
+            (Mode::Client, &ContentType::ChangeCipherSpec),
+            (Mode::Client, &HandshakeType::Finished),
+            (Mode::Server, &ContentType::ChangeCipherSpec),
+            (Mode::Server, &HandshakeType::EncryptedExtensions),
+            (Mode::Server, &HandshakeType::Certificate),
+            (Mode::Server, &HandshakeType::CertificateVerify),
+            (Mode::Server, &HandshakeType::Finished),
+            (Mode::Server, &HandshakeType::NewSessionTicket),
+            (Mode::Server, &HandshakeType::NewSessionTicket),
+            (Mode::Server, &ContentType::ApplicationData),
+            (Mode::Server, &ContentType::Alert),
+            (Mode::Client, &ContentType::Alert),
+        ];
+
         let mut messages = server_auth_transcript.drain(..);
-
-        // handshake starts
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::ClientHello
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::ServerHello
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
-
-        // encrypted data
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::Finished
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(message.content_type(), ContentType::ChangeCipherSpec);
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::EncryptedExtensions
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::Certificate
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::CertificateVerify
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::Finished
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::NewSessionTicket
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(
-            message.as_handshake().handshake_type(),
-            HandshakeType::NewSessionTicket
-        );
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(message.content_type(), ContentType::ApplicationData);
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Server);
-        assert_eq!(message.content_type(), ContentType::Alert);
-
-        let (sender, message) = messages.next().unwrap();
-        assert_eq!(sender, Mode::Client);
-        assert_eq!(message.content_type(), ContentType::Alert);
-
+        for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
+            let (actual_sender, actual_content) = messages.next().unwrap();
+            assert_eq!(actual_sender, sender);
+            assert!(content.same_as(actual_content));
+        }
         assert!(messages.next().is_none());
     }
     // assert!(false);
@@ -252,7 +191,14 @@ fn rustls_client_test() -> anyhow::Result<()> {
     };
     std::fs::write(
         "../capability-compendium/resources/handshakes/rustls_rustls_resumption.log",
-        format!("{:#?}", resumption_transcript.content_transcript.lock().unwrap().clone()),
+        format!(
+            "{:#?}",
+            resumption_transcript
+                .content_transcript
+                .lock()
+                .unwrap()
+                .clone()
+        ),
     )
     .unwrap();
 

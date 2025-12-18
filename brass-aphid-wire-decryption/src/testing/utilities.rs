@@ -1,3 +1,9 @@
+use std::ops::Deref;
+
+use brass_aphid_wire_messages::protocol::{
+    content_value::ContentValue, ContentType, HandshakeType,
+};
+
 pub fn s2n_server_config(
     security_policy: &str,
     cert_type: &[SigType],
@@ -80,4 +86,44 @@ fn read_to_bytes(pem_type: PemType, sig_type: SigType) -> Vec<u8> {
     std::fs::read_to_string(get_cert_path(pem_type, sig_type))
         .unwrap()
         .into_bytes()
+}
+
+/// This is a test utility which makes it easier for us to assert against an expected
+/// TLS transcript without having to write a million match statements
+pub trait ContentValueTestEquality {
+    fn same_as(&self, content_value: ContentValue) -> bool;
+}
+
+// they are getting angry about my blanket impl
+// impl<T: PartialEq<ContentValue>> ContentValueTestEquality for T {
+//     fn same_as(&self, content_value: ContentValue) -> bool {
+//         self.eq(&content_value)
+//     }
+// }
+
+
+impl ContentValueTestEquality for ContentValue {
+    fn same_as(&self, content_value: ContentValue) -> bool {
+        *self == content_value
+    }
+}
+
+impl ContentValueTestEquality for HandshakeType {
+    fn same_as(&self, content_value: ContentValue) -> bool {
+        match content_value {
+            ContentValue::Handshake(handshake_message_value) => {
+                handshake_message_value.handshake_type() == *self
+            }
+            incorrect => {
+                tracing::error!("Expected handshake but was {incorrect:?}");
+                false
+            }
+        }
+    }
+}
+
+impl ContentValueTestEquality for ContentType {
+    fn same_as(&self, content_value: ContentValue) -> bool {
+        content_value.content_type() == *self
+    }
 }

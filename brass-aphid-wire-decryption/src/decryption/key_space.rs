@@ -216,7 +216,6 @@ impl KeySpace {
 pub enum SecretSpace {
     Plaintext,
     Handshake(KeySpace),
-    // TODO: handle key updates
     Application(KeySpace, usize),
 }
 
