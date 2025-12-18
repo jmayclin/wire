@@ -102,11 +102,11 @@ fn rustls_client_test() -> anyhow::Result<()> {
         transcript
     };
 
-    std::fs::write(
-        "../capability-compendium/resources/handshakes/rustls_rustls_server_auth.log",
-        format!("{server_auth_transcript:#?}"),
-    )
-    .unwrap();
+    // std::fs::write(
+    //     "../capability-compendium/resources/handshakes/rustls_rustls_server_auth.log",
+    //     format!("{server_auth_transcript:#?}"),
+    // )
+    // .unwrap();
     println!("{server_auth_transcript:#?}");
 
     // validate server auth
@@ -189,18 +189,18 @@ fn rustls_client_test() -> anyhow::Result<()> {
         });
         transcript
     };
-    std::fs::write(
-        "../capability-compendium/resources/handshakes/rustls_rustls_resumption.log",
-        format!(
-            "{:#?}",
-            resumption_transcript
-                .content_transcript
-                .lock()
-                .unwrap()
-                .clone()
-        ),
-    )
-    .unwrap();
+    // std::fs::write(
+    //     "../capability-compendium/resources/handshakes/rustls_rustls_resumption.log",
+    //     format!(
+    //         "{:#?}",
+    //         resumption_transcript
+    //             .content_transcript
+    //             .lock()
+    //             .unwrap()
+    //             .clone()
+    //     ),
+    // )
+    // .unwrap();
 
     Ok(())
 }
