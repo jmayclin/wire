@@ -162,6 +162,14 @@ pub struct EcPointFormatList {
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct ExtendedMasterSecret {}
 
+/// The "post_handshake_auth" extension is used to indicate that a client is
+/// willing to perform post-handshake authentication (Section 4.6.2).
+/// 
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.6
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct PostHandshakeAuth {}
+
+
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5746#section-3.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct RenegotiationInfo {
@@ -357,6 +365,18 @@ pub struct CertificateStatus {
     request: OcspStatusRequest,
 }
 
+/// Defined in https://www.rfc-editor.org/rfc/rfc7301#section-3.1
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ApplicationLayerProtocolNegotiation {
+    protocol_name_list: PrefixedList<ProtocolName, u16>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+/// Defined in https://www.rfc-editor.org/rfc/rfc7301#section-3.1
+pub struct ProtocolName {
+    name: PrefixedBlob<u8>,
+}
+
 /// Defined in https://datatracker.ietf.org/doc/html/rfc7366#section-2
 /// Sent in ClientHello or ServerHello in TLS 1.2(ish?)
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -387,6 +407,8 @@ pub enum ClientHelloExtensionData {
     StatusRequest(CertificateStatus),
     SignedCertificateTimestamp(SignedCertificateTimestampClientHello),
     Heartbeat(HeatbeatMode),
+    ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation),
+    PostHandshakeAuth(PostHandshakeAuth),
     Unknown(Vec<u8>),
 }
 
@@ -441,7 +463,10 @@ impl DecodeValue for ClientHelloExtension {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::Heartbeat(value)
             }
-            ExtensionType::ApplicationLayerProtocolNegotiation => todo!(),
+            ExtensionType::ApplicationLayerProtocolNegotiation => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::ApplicationLayerProtocolNegotiation(value)
+            }
             ExtensionType::SignedCertificateTimestamp => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignedCertificateTimestamp(value)
@@ -498,8 +523,14 @@ impl DecodeValue for ClientHelloExtension {
                 ClientHelloExtensionData::PskKeyExchangeModes(value)
             }
             ExtensionType::CertificateAuthorities => todo!(),
-            ExtensionType::OidFilters => todo!(),
-            ExtensionType::PostHandshakeAuth => todo!(),
+            ExtensionType::OidFilters => {
+                tracing::warn!("client is into some nasty, freaky stuff. Sent an oid_filters extension in the Client Hello");
+                ClientHelloExtensionData::Unknown(extension.extension_data.blob().to_vec())
+            },
+            ExtensionType::PostHandshakeAuth => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::PostHandshakeAuth(value)
+            },
             ExtensionType::SignatureAlgorithmsCert => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureSchemeCert(value)
@@ -549,7 +580,11 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::EncryptThenMac(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::StatusRequest(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::Heartbeat(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::PostHandshakeAuth(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::SignedCertificateTimestamp(extension) => {
+                extension.encode_to_vec()
+            }
+            ClientHelloExtensionData::ApplicationLayerProtocolNegotiation(extension) => {
                 extension.encode_to_vec()
             }
         }?;
