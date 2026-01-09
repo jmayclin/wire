@@ -20,7 +20,7 @@ use std::{
 static IANA_SIGNATURE_SCHEMES: LazyLock<Vec<SignatureScheme>> =
     LazyLock::new(SignatureScheme::parse_iana_csv);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct SignatureScheme {
     pub value: u16,
     pub description: &'static str,
@@ -293,7 +293,7 @@ impl FromStr for Cipher {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct Group {
     pub value: u16,
     pub description: &'static str,

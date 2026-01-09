@@ -106,7 +106,19 @@ impl SignatureScheme {
     // }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    strum::EnumIter,
+    DecodeEnum,
+    EncodeEnum,
+    Ord,
+    PartialOrd,
+    Hash,
+)]
 #[repr(u16)]
 pub enum Protocol {
     SSLv2 = 0x0002,
