@@ -2,8 +2,10 @@ use ::ecdsa::{EcdsaCurve, SignatureEncoding, SigningKey};
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
     iana,
-    prefixed_list::PrefixedBlob,
-    protocol::{content_value::HandshakeMessageValue, CertVerifyTls13, Finished},
+    prefixed_list::{PrefixedBlob, PrefixedList},
+    protocol::{
+        CertVerifyTls13, CertificateEntry, CertificateTls13, Finished, content_value::HandshakeMessageValue
+    },
 };
 use ecdsa::signature::Signer;
 use elliptic_curve::CurveArithmetic;
@@ -11,7 +13,7 @@ use hmac::EagerHash;
 use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256, Sha384};
 
-use crate::decryption::key_space::hkdf_expand_label_rc;
+use crate::{decryption::key_space::hkdf_expand_label_rc};
 
 //    +-----------+-------------------------+-----------------------------+
 //    | Mode      | Handshake Context       | Base Key                    |
@@ -71,15 +73,12 @@ fn transcript_hash(cipher: iana::Cipher, messages: &[HandshakeMessageValue]) -> 
 // C: EcdsaCurve + CurveArithmetic
 
 /// Return a valid TLS 1.3 certificate verify message.
-pub fn tls13_certificate_verify<C>(
+pub fn tls13_certificate_verify(
     transcript: &[HandshakeMessageValue],
     cipher: iana::Cipher,
-    signature_scheme: iana::SignatureScheme,
+    digest: &'static str,
     private_key_pem: &str,
-) -> CertVerifyTls13
-where
-    C: EcdsaCurve + CurveArithmetic,
-{
+) -> Vec<u8> {
     /// The context string for a server signature is
     ///    "TLS 1.3, server CertificateVerify"
     /// https://www.rfc-editor.org/rfc/rfc8446#section-4.4.3
@@ -107,40 +106,52 @@ where
     // -  A single 0 byte which serves as the separator
     // -  The content to be signed
     // https://www.rfc-editor.org/rfc/rfc8446#section-4.4.3
-    let cert_verify_message = vec![&[32; 64], CONTEXT, &[0], transcript_hash.as_slice()].concat();
+    let cert_verify_message = vec![&[0x20; 64], CONTEXT, &[0], transcript_hash.as_slice()].concat();
+    println!("cert verify message: {}", cert_verify_message.len());
+    println!("cert verify: {cert_verify_message:?}");
 
-    let digest_to_sign = match signature_scheme {
-        iana::constants::ecdsa_secp256r1_sha256 => {
-            sha2::Sha256::digest(cert_verify_message).to_vec()
-        }
-        iana::constants::ecdsa_secp384r1_sha384 => {
-            sha2::Sha384::digest(cert_verify_message).to_vec()
-        }
+    let digest_to_sign = match digest {
+        "sha256" => sha2::Sha256::digest(cert_verify_message).to_vec(),
+        "sha384" => sha2::Sha384::digest(cert_verify_message).to_vec(),
         _ => {
-            unimplemented!("{signature_scheme:?} is not implemented");
+            unimplemented!("{digest:?} is not implemented");
         }
     };
+    println!("digest to sign size: {}", digest_to_sign.len());
+    println!("digest to sign: {digest_to_sign:?}");
+
+    // there is an awful edge case? where s2n-tls refuses to accept RustCrypto
+    // generated signatures. This makes me unhappy. I do not approve.
+    {
+        // 1️⃣ Load the private key PEM
+        let pkey = openssl::pkey::PKey::private_key_from_pem(private_key_pem.as_bytes()).unwrap();
+
+        // 3️⃣ Create a signature using OpenSSL
+        let sig = openssl::ecdsa::EcdsaSig::sign(&digest_to_sign, &pkey.ec_key().unwrap()).unwrap();
+
+        // 4️⃣ Serialize DER (this is what TLS expects)
+        let der_bytes = sig.to_der().unwrap();
+        return der_bytes;
+    }
 
     let maybe_secp256r1 = p256::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
     let maybe_secp384r1 = p384::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
     let signature = match (maybe_secp256r1, maybe_secp384r1) {
         (Ok(secp256r1), _) => {
             let signature: p256::ecdsa::Signature = secp256r1.sign(&digest_to_sign);
-            signature.to_vec()
+            let der = signature.to_der();
+            der.as_bytes().to_vec()
         }
         (Err(_), Ok(secp384r1)) => {
             let signature: p384::ecdsa::Signature = secp384r1.sign(&digest_to_sign);
-            signature.to_vec()
+            signature.to_der().as_bytes().to_vec()
         }
         (Err(_), Err(_)) => {
             panic!("unable to parse key")
         }
     };
 
-    CertVerifyTls13 {
-        algorithm: signature_scheme,
-        signature: PrefixedBlob::new(signature),
-    }
+    signature
 }
 
 /// Create the finished message
@@ -170,12 +181,27 @@ where
 //     }
 // }
 
+pub fn certificate(certificate_chain_pem: &[u8]) -> CertificateTls13 {
+    let certs = openssl::x509::X509::stack_from_pem(certificate_chain_pem).unwrap();
+    let certs: Vec<CertificateEntry> = certs
+        .into_iter()
+        .map(|cert| cert.to_der().unwrap())
+        .map(|cert_der| CertificateEntry {
+            cert_data: PrefixedBlob::new(cert_der),
+            extensions: PrefixedBlob::new(Vec::new()),
+        })
+        .collect();
+    CertificateTls13 {
+        certificate_request_context: PrefixedBlob::new(Vec::new()),
+        certificate_list: PrefixedList::new(certs),
+    }
+}
+
 pub fn finished(
     base_key: &[u8],
     cipher: iana::Cipher,
     transcript: &[HandshakeMessageValue],
-) -> Finished
-{
+) -> Finished {
     use hmac::{Hmac, KeyInit, Mac};
 
     let result = match cipher {
