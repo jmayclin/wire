@@ -13,7 +13,7 @@ pub mod offline;
 pub mod prefixed_list;
 #[cfg(test)]
 pub mod testing;
-mod transcript_verification;
+pub mod transcript_verification;
 
 trait ClientCapability {
     fn client_capability(&self) -> String;

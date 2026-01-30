@@ -34,11 +34,19 @@ s2n-tls-sys = { version = "0.3.21", path = "/home/ubuntu/workspace/s2n-tls/bindi
 
 rustls = "0.23.29"
 openssl-sys = "0.9.109"
-sha2 = "0.11.0-rc.4"
-hkdf = "0.13.0-rc.4"
-p256 = "0.14.0-rc.6"
-hmac = "0.13.0-rc.4"
+
+############################ rust crypto crates ################################
 digest = "0.11.0-rc.9"
+sha2 = "0.11.0-rc.4"
+
+hkdf = "0.13.0-rc.4"
+hmac = "0.13.0-rc.4"
+
+p256 = "0.14.0-rc.6"
+p384 = "0.14.0-rc.6"
+elliptic-curve = "0.14.0-rc.24"
+ecdsa = "0.17.0-rc.14"
+signature = "3.0.0-rc.9"
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["full"] }

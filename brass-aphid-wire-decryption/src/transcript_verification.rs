@@ -1,12 +1,15 @@
+use ::ecdsa::{EcdsaCurve, SignatureEncoding, SigningKey};
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
     iana,
     prefixed_list::PrefixedBlob,
     protocol::{content_value::HandshakeMessageValue, CertVerifyTls13, Finished},
 };
+use ecdsa::signature::Signer;
+use elliptic_curve::CurveArithmetic;
 use hmac::EagerHash;
-use p256::ecdsa::{self, signature::Signer};
-use sha2::{Digest, Sha256};
+use p256::pkcs8::DecodePrivateKey;
+use sha2::{Digest, Sha256, Sha384};
 
 use crate::decryption::key_space::hkdf_expand_label_rc;
 
@@ -65,19 +68,24 @@ fn transcript_hash(cipher: iana::Cipher, messages: &[HandshakeMessageValue]) -> 
     digest
 }
 
+// C: EcdsaCurve + CurveArithmetic
+
 /// Return a valid TLS 1.3 certificate verify message.
-fn tls13_certificate_verify(
+pub fn tls13_certificate_verify<C>(
     transcript: &[HandshakeMessageValue],
     cipher: iana::Cipher,
     signature_scheme: iana::SignatureScheme,
-    private_key: Vec<u8>,
-) -> CertVerifyTls13 {
+    private_key_pem: &str,
+) -> CertVerifyTls13
+where
+    C: EcdsaCurve + CurveArithmetic,
+{
     /// The context string for a server signature is
     ///    "TLS 1.3, server CertificateVerify"
     /// https://www.rfc-editor.org/rfc/rfc8446#section-4.4.3
     const CONTEXT: &[u8] = b"TLS 1.3, server CertificateVerify";
 
-    let certificate = match transcript.last() {
+    match transcript.last() {
         Some(HandshakeMessageValue::CertificateTls13(cert_value)) => cert_value,
         Some(other) => {
             panic!(
@@ -89,8 +97,7 @@ fn tls13_certificate_verify(
             panic!("transcript was empty");
         }
     };
-
-    let private_key = p256::ecdsa::SigningKey::from_slice(&private_key).unwrap();
+    // let private_key: SigningKey<C> = SigningKey::from_slice(&private_key).unwrap();
 
     let transcript_hash = transcript_hash(cipher, transcript);
 
@@ -114,46 +121,106 @@ fn tls13_certificate_verify(
         }
     };
 
-    let signature: ecdsa::Signature = private_key.sign(&digest_to_sign);
-    let signature_bytes = signature.to_bytes().to_vec();
+    let maybe_secp256r1 = p256::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
+    let maybe_secp384r1 = p384::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
+    let signature = match (maybe_secp256r1, maybe_secp384r1) {
+        (Ok(secp256r1), _) => {
+            let signature: p256::ecdsa::Signature = secp256r1.sign(&digest_to_sign);
+            signature.to_vec()
+        }
+        (Err(_), Ok(secp384r1)) => {
+            let signature: p384::ecdsa::Signature = secp384r1.sign(&digest_to_sign);
+            signature.to_vec()
+        }
+        (Err(_), Err(_)) => {
+            panic!("unable to parse key")
+        }
+    };
 
     CertVerifyTls13 {
         algorithm: signature_scheme,
-        signature: PrefixedBlob::new(signature_bytes),
+        signature: PrefixedBlob::new(signature),
     }
 }
 
 /// Create the finished message
-fn finished<H>(
+// pub fn finished<H>(
+//     base_key: &[u8],
+//     cipher: iana::Cipher,
+//     transcript: &[HandshakeMessageValue],
+// ) -> Finished
+// where
+//     H: digest::Digest + EagerHash + Clone,
+// {
+//     use hmac::{Hmac, KeyInit, Mac};
+
+//     let finished_key = hkdf_expand_label_rc::<H>(
+//         base_key,
+//         b"finished",
+//         b"",
+//         <H as digest::Digest>::output_size() as u16,
+//     );
+//     let mut mac = Hmac::<H>::new_from_slice(&finished_key).unwrap();
+
+//     mac.update(&transcript_hash(cipher, transcript));
+//     let result = mac.finalize().into_bytes().to_vec();
+
+//     Finished {
+//         verify_data: result,
+//     }
+// }
+
+pub fn finished(
     base_key: &[u8],
     cipher: iana::Cipher,
     transcript: &[HandshakeMessageValue],
 ) -> Finished
-where
-    H: digest::Digest + EagerHash + Clone,
 {
     use hmac::{Hmac, KeyInit, Mac};
 
-    let finished_key = hkdf_expand_label_rc::<H>(
-        base_key,
-        b"finished",
-        &[],
-        <H as digest::Digest>::output_size() as u16,
-    );
-    let mut mac = Hmac::<H>::new_from_slice(&finished_key).unwrap();
-
-    mac.update(&transcript_hash(cipher, transcript));
-    let result = mac.finalize().into_bytes().to_vec();
+    let result = match cipher {
+        iana::constants::TLS_AES_128_GCM_SHA256 | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
+            let finished_key = hkdf_expand_label_rc::<Sha256>(
+                base_key,
+                b"finished",
+                b"",
+                Sha256::output_size() as u16,
+            );
+            let mut mac = hmac::Hmac::<Sha256>::new_from_slice(&finished_key).unwrap();
+            let transcript_hash_debug = transcript_hash(cipher, transcript);
+            println!("{transcript_hash_debug:?}");
+            mac.update(&transcript_hash(cipher, transcript));
+            mac.finalize().into_bytes().to_vec()
+        }
+        iana::constants::TLS_AES_256_GCM_SHA384 => {
+            let finished_key = hkdf_expand_label_rc::<Sha384>(
+                base_key,
+                b"finished",
+                b"",
+                Sha384::output_size() as u16,
+            );
+            let mut mac = Hmac::<Sha384>::new_from_slice(&finished_key).unwrap();
+            mac.update(&transcript_hash(cipher, transcript));
+            mac.finalize().into_bytes().to_vec()
+        }
+        _ => {
+            unimplemented!("{cipher:?} has some _funk_");
+        }
+    };
 
     Finished {
         verify_data: result,
     }
 }
 
-//    The algorithm field specifies the signature algorithm used (see
-//    Section 4.2.3 for the definition of this type).  The signature is a
-//    digital signature using that algorithm.  The content that is covered
-//    under the signature is the hash output as described in Section 4.4.1,
-//    namely:
-//
-//       Transcript-Hash(Handshake Context, Certificate)
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn key_parsing() {
+        const SECP_256_R1: &str = include_str!("../../certs/ecdsa256/server-key.pem");
+        const SECP_384_R1: &str = include_str!("../../certs/ecdsa384/server-key.pem");
+
+        let maybe_secp256r1 = p256::ecdsa::SigningKey::from_pkcs8_pem(&SECP_256_R1).unwrap();
+        let maybe_secp384r1 = p384::ecdsa::SigningKey::from_pkcs8_pem(&SECP_384_R1).unwrap();
+    }
+}
