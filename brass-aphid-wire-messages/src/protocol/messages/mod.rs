@@ -504,7 +504,7 @@ impl DecodeValueWithContext for ServerKeyExchange {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.4.4
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, EncodeStruct)]
 pub struct Finished {
     pub verify_data: Vec<u8>,
 }

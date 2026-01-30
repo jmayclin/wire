@@ -61,7 +61,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::decryption::{stream_decrypter::StreamDecrypter, transcript};
+    use crate::{ClientCapability, decryption::{stream_decrypter::StreamDecrypter, transcript}};
     use std::{path::PathBuf, str::FromStr};
 
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";
@@ -127,6 +127,8 @@ mod tests {
 
                 let output_file = output_folder.join(format!("go_{version}_{name}.log"));
                 println!("output_file: {output_file:?}");
+                let capability = decrypter.transcript().client_hello().client_capability();
+                println!("go {version} capability: {capability}");
                 decrypter.dump_transcript(&output_file);
             }
         }

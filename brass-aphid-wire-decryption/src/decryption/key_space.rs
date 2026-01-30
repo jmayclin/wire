@@ -1,10 +1,17 @@
 use aws_lc_rs::{aead, hkdf};
 
+use ::hkdf::{GenericHkdf, Hkdf, HmacImpl};
 use brass_aphid_wire_messages::codec::{DecodeValue, EncodeValue};
+use brass_aphid_wire_messages::prefixed_list::PrefixedBlob;
 use brass_aphid_wire_messages::{
     iana,
     protocol::{ContentType, RecordHeader},
 };
+use digest::core_api::FixedOutputCore;
+use hmac::digest::HashMarker;
+use hmac::{EagerHash, Hmac, SimpleHmac};
+use sha2::digest::core_api::CoreProxy;
+use sha2::{Sha256, Sha384};
 
 trait DecryptionCipherExtension {
     fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm;
@@ -82,6 +89,76 @@ fn hkdf_expand_label<T: hkdf::KeyType>(
     key
 }
 
+//    The key derivation process makes use of the HKDF-Extract and
+//    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
+//    functions defined below:
+//
+//        HKDF-Expand-Label(Secret, Label, Context, Length) =
+//             HKDF-Expand(Secret, HkdfLabel, Length)
+//
+//        Where HkdfLabel is specified as:
+//
+//        struct {
+//            uint16 length = Length;
+//            opaque label<7..255> = "tls13 " + Label;
+//            opaque context<0..255> = Context;
+//        } HkdfLabel;
+//
+//        Derive-Secret(Secret, Label, Messages) =
+//             HKDF-Expand-Label(Secret, Label,
+//                               Transcript-Hash(Messages), Hash.length)
+// https://www.rfc-editor.org/rfc/rfc8446#section-7.1
+pub fn hkdf_expand_label_rc<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Vec<u8>
+where
+    SimpleHmac<H>: HmacImpl,
+    H: digest::Digest + EagerHash,
+{
+    let hkdf_label = {
+        let length = u16::to_be_bytes(length).as_slice().to_vec();
+        let label: PrefixedBlob<u8> = PrefixedBlob::new([b"tls13 ", label].concat());
+        let context: PrefixedBlob<u8> = PrefixedBlob::new(context.to_vec());
+        [
+            length,
+            label.encode_to_vec().unwrap(),
+            context.encode_to_vec().unwrap(),
+        ]
+        .concat()
+    };
+
+    let mut output = vec![0; length as usize];
+
+    let hkdf = GenericHkdf::<SimpleHmac<H>>::from_prk(secret).unwrap();
+    hkdf.expand(&hkdf_label, &mut output).unwrap();
+
+    output
+}
+
+/// Either I am too stupid or RustCrypto's trait system in a nightmare. Likely some
+/// combination of the two
+trait MyHkdf {
+    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8>;
+}
+
+impl MyHkdf for Hkdf<Sha256> {
+    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8> {
+        let mut output = vec![0; output_length as usize];
+        let hkdf = Hkdf::<Sha256>::new(None, secret);
+        hkdf.expand(&info, &mut output);
+
+        output
+    }
+}
+
+impl MyHkdf for Hkdf<Sha384> {
+    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8> {
+        let mut output = vec![0; output_length as usize];
+        let hkdf = Hkdf::<Sha256>::new(None, secret);
+        hkdf.expand(&info, &mut output);
+
+        output
+    }
+}
+
 /// KeySpace represents the decryption context of some keys.
 ///
 /// E.g. Handshake Space or Traffic Space.
@@ -154,6 +231,27 @@ impl KeySpace {
         // Determine the hash algorithm, key length, and IV length based on the cipher suite
         let aead = self.cipher.aead();
 
+        let (rc_key, rc_iv) = match self.cipher {
+            iana::constants::TLS_AES_128_GCM_SHA256
+            | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
+                let key =
+                    hkdf_expand_label_rc::<Sha256>(secret, b"key", b"", aead.key_len() as u16);
+                let secret =
+                    hkdf_expand_label_rc::<Sha256>(secret, b"iv", b"", aead.nonce_len() as u16);
+                (key, secret)
+            }
+            iana::constants::TLS_AES_256_GCM_SHA384 => {
+                let key =
+                    hkdf_expand_label_rc::<Sha384>(secret, b"key", b"", aead.key_len() as u16);
+                let secret =
+                    hkdf_expand_label_rc::<Sha384>(secret, b"iv", b"", aead.nonce_len() as u16);
+                (key, secret)
+            }
+            unrecognized => {
+                unimplemented!("cipher {:?} is not supported", self.cipher)
+            }
+        };
+
         let key = hkdf_expand_label(
             secret,
             b"key",
@@ -168,6 +266,9 @@ impl KeySpace {
             UsizeContainer::new(aead.nonce_len()),
             self.cipher.hkdf(),
         );
+
+        assert_eq!(key, rc_key);
+        assert_eq!(iv, rc_iv);
 
         Ok((key, iv))
     }

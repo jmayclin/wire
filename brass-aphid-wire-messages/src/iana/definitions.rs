@@ -93,6 +93,7 @@ pub struct Cipher {
     pub description: &'static str,
 }
 
+
 /// This contains all of the ciphers from the IANA CSV, as well as [`NON_STANDARD_CIPHERS`].
 static IANA_CIPHERS: LazyLock<Vec<Cipher>> = LazyLock::new(|| {
     let mut ciphers = Cipher::parse_iana_csv();
