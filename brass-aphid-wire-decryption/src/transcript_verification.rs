@@ -96,7 +96,6 @@ pub fn tls13_certificate_verify(
             panic!("transcript was empty");
         }
     };
-    // let private_key: SigningKey<C> = SigningKey::from_slice(&private_key).unwrap();
 
     let transcript_hash = transcript_hash(cipher, transcript);
 
@@ -107,9 +106,6 @@ pub fn tls13_certificate_verify(
     // -  The content to be signed
     // https://www.rfc-editor.org/rfc/rfc8446#section-4.4.3
     let cert_verify_message = vec![&[0x20; 64], CONTEXT, &[0], transcript_hash.as_slice()].concat();
-    println!("cert verify message: {}", cert_verify_message.len());
-    println!("cert verify: {cert_verify_message:?}");
-
     let digest_to_sign = match digest {
         "sha256" => sha2::Sha256::digest(cert_verify_message).to_vec(),
         "sha384" => sha2::Sha384::digest(cert_verify_message).to_vec(),
@@ -117,8 +113,6 @@ pub fn tls13_certificate_verify(
             unimplemented!("{digest:?} is not implemented");
         }
     };
-    println!("digest to sign size: {}", digest_to_sign.len());
-    println!("digest to sign: {digest_to_sign:?}");
 
     // there is an awful edge case? where s2n-tls refuses to accept RustCrypto
     // generated signatures. This makes me unhappy. I do not approve.
@@ -134,52 +128,28 @@ pub fn tls13_certificate_verify(
         return der_bytes;
     }
 
-    let maybe_secp256r1 = p256::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
-    let maybe_secp384r1 = p384::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
-    let signature = match (maybe_secp256r1, maybe_secp384r1) {
-        (Ok(secp256r1), _) => {
-            let signature: p256::ecdsa::Signature = secp256r1.sign(&digest_to_sign);
-            let der = signature.to_der();
-            der.as_bytes().to_vec()
-        }
-        (Err(_), Ok(secp384r1)) => {
-            let signature: p384::ecdsa::Signature = secp384r1.sign(&digest_to_sign);
-            signature.to_der().as_bytes().to_vec()
-        }
-        (Err(_), Err(_)) => {
-            panic!("unable to parse key")
-        }
-    };
+    // TODO: I would prefer to use this, but unfortunately s2n-tls is rejecting
+    // something about the DER encoding? Or perhaps it's AWS-LC's fault?
 
-    signature
+    // let maybe_secp256r1 = p256::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
+    // let maybe_secp384r1 = p384::ecdsa::SigningKey::from_pkcs8_pem(&private_key_pem);
+    // let signature = match (maybe_secp256r1, maybe_secp384r1) {
+    //     (Ok(secp256r1), _) => {
+    //         let signature: p256::ecdsa::Signature = secp256r1.sign(&digest_to_sign);
+    //         let der = signature.to_der();
+    //         der.as_bytes().to_vec()
+    //     }
+    //     (Err(_), Ok(secp384r1)) => {
+    //         let signature: p384::ecdsa::Signature = secp384r1.sign(&digest_to_sign);
+    //         signature.to_der().as_bytes().to_vec()
+    //     }
+    //     (Err(_), Err(_)) => {
+    //         panic!("unable to parse key")
+    //     }
+    // };
+
+    // signature
 }
-
-/// Create the finished message
-// pub fn finished<H>(
-//     base_key: &[u8],
-//     cipher: iana::Cipher,
-//     transcript: &[HandshakeMessageValue],
-// ) -> Finished
-// where
-//     H: digest::Digest + EagerHash + Clone,
-// {
-//     use hmac::{Hmac, KeyInit, Mac};
-
-//     let finished_key = hkdf_expand_label_rc::<H>(
-//         base_key,
-//         b"finished",
-//         b"",
-//         <H as digest::Digest>::output_size() as u16,
-//     );
-//     let mut mac = Hmac::<H>::new_from_slice(&finished_key).unwrap();
-
-//     mac.update(&transcript_hash(cipher, transcript));
-//     let result = mac.finalize().into_bytes().to_vec();
-
-//     Finished {
-//         verify_data: result,
-//     }
-// }
 
 pub fn certificate(certificate_chain_pem: &[u8]) -> CertificateTls13 {
     let certs = openssl::x509::X509::stack_from_pem(certificate_chain_pem).unwrap();
