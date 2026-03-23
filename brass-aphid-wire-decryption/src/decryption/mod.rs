@@ -51,7 +51,7 @@ pub struct DecryptingPipe<T> {
 
 impl DecryptingPipe<ArchaicCPipe> {
     /// configure a decrypting pipe for an s2n-tls connection.
-    /// 
+    ///
     /// This will steal the currently configure send/recv callbacks and wrap them
     /// in a pipe that the decrypter will use to populate the data
     pub fn s2n_tls_decrypter(

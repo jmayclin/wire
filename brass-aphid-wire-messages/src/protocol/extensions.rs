@@ -164,11 +164,10 @@ pub struct ExtendedMasterSecret {}
 
 /// The "post_handshake_auth" extension is used to indicate that a client is
 /// willing to perform post-handshake authentication (Section 4.6.2).
-/// 
+///
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.6
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct PostHandshakeAuth {}
-
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5746#section-3.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -220,8 +219,6 @@ pub struct CertificateTypeClientHello {
 pub struct Cookie {
     pub cookie: PrefixedBlob<u16>,
 }
-
-
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -598,11 +595,11 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::OidFilters => {
                 tracing::warn!("client is into some nasty, freaky stuff. Sent an oid_filters extension in the Client Hello");
                 ClientHelloExtensionData::Unknown(extension.extension_data.blob().to_vec())
-            },
+            }
             ExtensionType::PostHandshakeAuth => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::PostHandshakeAuth(value)
-            },
+            }
             ExtensionType::SignatureAlgorithmsCert => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureSchemeCert(value)

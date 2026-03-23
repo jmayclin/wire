@@ -179,7 +179,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
                     assert_eq!(tls.conn.handshake_kind(), Some(HandshakeKind::Resumed));
                     let shutdown = tls.read(&mut []);
                     tls.conn.send_close_notify();
-                    tls.write(&[]);
+                    let _ = tls.write(&[]);
 
                     decrypting_pipe.decrypter.transcript()
                 })

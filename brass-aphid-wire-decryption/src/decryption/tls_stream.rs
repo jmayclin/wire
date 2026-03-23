@@ -311,7 +311,7 @@ impl TlsStream {
                 Ok(decode) => decode,
                 // TODO: we should only return None if there isn't enough data to
                 // decrypt the RecordHeader. We should bubble up different parsing errors.
-                Err(e) => return None,
+                Err(_e) => return None,
             };
 
         if remaining.len() >= record_header.record_length as usize {

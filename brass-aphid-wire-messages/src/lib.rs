@@ -1,7 +1,3 @@
-use std::ops::Deref;
-
-use crate::protocol::{ContentType, HandshakeType, content_value::ContentValue};
-
 pub mod codec;
 pub mod iana;
 pub mod prefixed_list;

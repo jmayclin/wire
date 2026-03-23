@@ -7,8 +7,6 @@ use s2n_tls::testing::TestPair;
 
 #[test]
 fn key_update_request() -> anyhow::Result<()> {
-
-
     let key_manager = KeyManager::new();
 
     let client_config = s2n_server_config("default_tls13", &[SigType::Rsa3072]).unwrap();

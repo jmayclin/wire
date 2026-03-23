@@ -71,7 +71,7 @@ impl StreamDecrypter {
         std::fs::write(file, transcript).unwrap();
     }
 
-    pub fn assemble_records(&mut self, mode: Mode) -> std::io::Result<()> {
+    pub fn assemble_records(&mut self, _mode: Mode) -> std::io::Result<()> {
         // TODO: error handling. We currently assume that all errors are just because
         // there isn't enough data. Which will not be true into the future. Also
         // should think more about the "not enough data" error.

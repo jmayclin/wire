@@ -1,5 +1,6 @@
 use std::{
-    any::type_name, ffi::{c_int, c_void}, io::ErrorKind
+    any::type_name,
+    ffi::{c_int, c_void},
 };
 
 use s2n_tls::connection::Connection as S2NConnection;
@@ -156,7 +157,7 @@ pub(crate) unsafe extern "C" fn generic_send_cb<T: std::io::Write>(
                 }
             }
             -1
-        },
+        }
     }
 }
 
@@ -168,7 +169,11 @@ pub(crate) unsafe extern "C" fn generic_recv_cb<T: std::io::Read>(
 ) -> c_int {
     let context: &mut T = &mut *(raw_context as *mut T);
     let data = core::slice::from_raw_parts_mut(data, len as _);
-    tracing::trace!("generic recv cb {:?} into: buffer of size {}", type_name::<T>(), data.len());
+    tracing::trace!(
+        "generic recv cb {:?} into: buffer of size {}",
+        type_name::<T>(),
+        data.len()
+    );
     let read_result = context.read(data);
     tracing::trace!("generic recv cb: read result: {read_result:?}");
     match read_result {

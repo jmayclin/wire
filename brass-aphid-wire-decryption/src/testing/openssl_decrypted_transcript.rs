@@ -1,8 +1,8 @@
 use std::io::{Read, Write};
 
 use crate::{
-    decryption::{DecryptingPipe, Mode, key_manager::KeyManager},
-    testing::utilities::{ContentValueTestEquality, PemType, SigType, get_cert_path},
+    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
+    testing::utilities::{get_cert_path, ContentValueTestEquality, PemType, SigType},
 };
 use brass_aphid_wire_messages::protocol::{
     content_value::ContentValue, ContentType, HandshakeType,

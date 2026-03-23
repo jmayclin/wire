@@ -101,7 +101,6 @@ pub trait ContentValueTestEquality {
 //     }
 // }
 
-
 impl ContentValueTestEquality for ContentValue {
     fn same_as(&self, content_value: ContentValue) -> bool {
         *self == content_value
