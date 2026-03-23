@@ -26,3 +26,10 @@ path = "fuzz_targets/psk.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "no_panic"
+path = "fuzz_targets/no_panic.rs"
+test = false
+doc = false
+bench = false

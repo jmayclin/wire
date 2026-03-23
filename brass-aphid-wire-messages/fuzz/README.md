@@ -1,1 +1,1 @@
-cargo +nightly fuzz run fuzz_target_1
+cargo +nightly fuzz run no_panic
