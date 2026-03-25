@@ -13,7 +13,7 @@ use hmac::EagerHash;
 use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256, Sha384};
 
-use crate::{decryption::key_space::hkdf_expand_label_rc};
+use crate::{decryption::key_space::hkdf_expand_label};
 
 //    +-----------+-------------------------+-----------------------------+
 //    | Mode      | Handshake Context       | Base Key                    |
@@ -176,7 +176,7 @@ pub fn finished(
 
     let result = match cipher {
         iana::constants::TLS_AES_128_GCM_SHA256 | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
-            let finished_key = hkdf_expand_label_rc::<Sha256>(
+            let finished_key = hkdf_expand_label::<Sha256>(
                 base_key,
                 b"finished",
                 b"",
@@ -189,7 +189,7 @@ pub fn finished(
             mac.finalize().into_bytes().to_vec()
         }
         iana::constants::TLS_AES_256_GCM_SHA384 => {
-            let finished_key = hkdf_expand_label_rc::<Sha384>(
+            let finished_key = hkdf_expand_label::<Sha384>(
                 base_key,
                 b"finished",
                 b"",

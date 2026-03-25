@@ -1,93 +1,14 @@
-use aws_lc_rs::{aead, hkdf};
-
-use ::hkdf::{GenericHkdf, Hkdf, HmacImpl};
+use ::hkdf::{GenericHkdf, HmacImpl};
+use aes_gcm::{Aes128Gcm, Aes256Gcm, KeyInit};
 use brass_aphid_wire_messages::codec::{DecodeValue, EncodeValue};
 use brass_aphid_wire_messages::prefixed_list::PrefixedBlob;
 use brass_aphid_wire_messages::{
     iana,
     protocol::{ContentType, RecordHeader},
 };
-use digest::core_api::FixedOutputCore;
-use hmac::digest::HashMarker;
-use hmac::{EagerHash, Hmac, SimpleHmac};
-use sha2::digest::core_api::CoreProxy;
+use chacha20poly1305::ChaCha20Poly1305;
+use hmac::{EagerHash, SimpleHmac};
 use sha2::{Sha256, Sha384};
-
-trait DecryptionCipherExtension {
-    fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm;
-
-    fn hkdf(&self) -> aws_lc_rs::hkdf::Algorithm;
-}
-
-impl DecryptionCipherExtension for iana::Cipher {
-    fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm {
-        match self.description {
-            "TLS_AES_128_GCM_SHA256" => &aead::AES_128_GCM,
-            "TLS_AES_256_GCM_SHA384" => &aead::AES_256_GCM,
-            "TLS_CHACHA20_POLY1305_SHA256" => &aead::CHACHA20_POLY1305,
-            _ => panic!("one of us did something stupid. Probably me."),
-        }
-    }
-
-    fn hkdf(&self) -> aws_lc_rs::hkdf::Algorithm {
-        match self.description {
-            "TLS_AES_128_GCM_SHA256" => hkdf::HKDF_SHA256,
-            "TLS_AES_256_GCM_SHA384" => hkdf::HKDF_SHA384,
-            "TLS_CHACHA20_POLY1305_SHA256" => hkdf::HKDF_SHA256,
-            _ => panic!("one of us did something stupid. Probably me."),
-        }
-    }
-}
-
-struct UsizeContainer(usize);
-
-impl UsizeContainer {
-    fn new(num: usize) -> Self {
-        UsizeContainer(num)
-    }
-}
-
-// they have unfortunately made me too angry to put up with their API
-// I am done asking nicely, and will simply transmute it into the shape
-// I wish for, and deal with the consequences later.
-impl hkdf::KeyType for UsizeContainer {
-    fn len(&self) -> usize {
-        self.0
-    }
-}
-
-fn hkdf_expand_label<T: hkdf::KeyType>(
-    secret: &[u8],
-    label: &[u8],
-    context: &[u8],
-    key_type: T,
-    hkdf: hkdf::Algorithm,
-) -> Vec<u8> {
-    let prk = hkdf::Prk::new_less_safe(hkdf, secret);
-
-    let output_length_bytes = (key_type.len() as u16).to_be_bytes();
-    let label = {
-        let mut label_builder = Vec::new();
-        label_builder.extend_from_slice(b"tls13 ");
-        label_builder.extend_from_slice(label);
-        label_builder
-    };
-    let label_bytes = label.len() as u8;
-
-    let context_bytes = context.len() as u8;
-    let label = [
-        output_length_bytes.as_slice(),
-        &[label_bytes],
-        &label,
-        &[context_bytes],
-        context,
-    ];
-
-    let mut key = vec![0; key_type.len()];
-    let out = prk.expand(&label, key_type).unwrap();
-    out.fill(&mut key).unwrap();
-    key
-}
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -108,7 +29,7 @@ fn hkdf_expand_label<T: hkdf::KeyType>(
 //             HKDF-Expand-Label(Secret, Label,
 //                               Transcript-Hash(Messages), Hash.length)
 // https://www.rfc-editor.org/rfc/rfc8446#section-7.1
-pub fn hkdf_expand_label_rc<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Vec<u8>
+pub fn hkdf_expand_label<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Vec<u8>
 where
     SimpleHmac<H>: HmacImpl,
     H: digest::Digest + EagerHash,
@@ -131,32 +52,6 @@ where
     hkdf.expand(&hkdf_label, &mut output).unwrap();
 
     output
-}
-
-/// Either I am too stupid or RustCrypto's trait system in a nightmare. Likely some
-/// combination of the two
-trait MyHkdf {
-    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8>;
-}
-
-impl MyHkdf for Hkdf<Sha256> {
-    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8> {
-        let mut output = vec![0; output_length as usize];
-        let hkdf = Hkdf::<Sha256>::new(None, secret);
-        hkdf.expand(&info, &mut output);
-
-        output
-    }
-}
-
-impl MyHkdf for Hkdf<Sha384> {
-    fn hkdf_expand(secret: &[u8], info: &[u8], output_length: usize) -> Vec<u8> {
-        let mut output = vec![0; output_length as usize];
-        let hkdf = Hkdf::<Sha256>::new(None, secret);
-        hkdf.expand(&info, &mut output);
-
-        output
-    }
 }
 
 /// KeySpace represents the decryption context of some keys.
@@ -204,19 +99,17 @@ impl KeySpace {
     ///
     /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-7.2
     pub fn key_update(&self) -> Self {
-        let new_secret = hkdf_expand_label(
-            &self.secret,
-            b"traffic upd",
-            b"",
-            UsizeContainer::new(
-                self.cipher
-                    .hkdf()
-                    .hmac_algorithm()
-                    .digest_algorithm()
-                    .output_len(),
-            ),
-            self.cipher.hkdf(),
-        );
+        let hash_len = self.cipher.hash().digest_size() as u16;
+        let new_secret = match self.cipher {
+            iana::constants::TLS_AES_128_GCM_SHA256
+            | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
+                hkdf_expand_label::<Sha256>(&self.secret, b"traffic upd", b"", hash_len)
+            }
+            iana::constants::TLS_AES_256_GCM_SHA384 => {
+                hkdf_expand_label::<Sha384>(&self.secret, b"traffic upd", b"", hash_len)
+            }
+            _ => panic!("unsupported cipher for key update: {:?}", self.cipher),
+        };
         Self {
             cipher: self.cipher,
             secret: new_secret,
@@ -228,47 +121,28 @@ impl KeySpace {
     /// Return the actual key and IV which will be used the the symmetric cipher
     pub fn traffic_key(&self) -> std::io::Result<(Vec<u8>, Vec<u8>)> {
         let secret = &self.secret;
-        // Determine the hash algorithm, key length, and IV length based on the cipher suite
-        let aead = self.cipher.aead();
 
-        let (rc_key, rc_iv) = match self.cipher {
-            iana::constants::TLS_AES_128_GCM_SHA256
-            | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
-                let key =
-                    hkdf_expand_label_rc::<Sha256>(secret, b"key", b"", aead.key_len() as u16);
-                let secret =
-                    hkdf_expand_label_rc::<Sha256>(secret, b"iv", b"", aead.nonce_len() as u16);
-                (key, secret)
-            }
-            iana::constants::TLS_AES_256_GCM_SHA384 => {
-                let key =
-                    hkdf_expand_label_rc::<Sha384>(secret, b"key", b"", aead.key_len() as u16);
-                let secret =
-                    hkdf_expand_label_rc::<Sha384>(secret, b"iv", b"", aead.nonce_len() as u16);
-                (key, secret)
-            }
-            unrecognized => {
-                unimplemented!("cipher {:?} is not supported", self.cipher)
-            }
+        let (key_len, nonce_len) = match self.cipher {
+            iana::constants::TLS_AES_128_GCM_SHA256 => (16, 12),
+            iana::constants::TLS_AES_256_GCM_SHA384 => (32, 12),
+            iana::constants::TLS_CHACHA20_POLY1305_SHA256 => (32, 12),
+            _ => unimplemented!("cipher {:?} is not supported", self.cipher),
         };
 
-        let key = hkdf_expand_label(
-            secret,
-            b"key",
-            b"",
-            UsizeContainer::new(aead.key_len()),
-            self.cipher.hkdf(),
-        );
-        let iv = hkdf_expand_label(
-            secret,
-            b"iv",
-            b"",
-            UsizeContainer::new(aead.nonce_len()),
-            self.cipher.hkdf(),
-        );
-
-        assert_eq!(key, rc_key);
-        assert_eq!(iv, rc_iv);
+        let (key, iv) = match self.cipher {
+            iana::constants::TLS_AES_128_GCM_SHA256
+            | iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
+                let key = hkdf_expand_label::<Sha256>(secret, b"key", b"", key_len);
+                let iv = hkdf_expand_label::<Sha256>(secret, b"iv", b"", nonce_len);
+                (key, iv)
+            }
+            iana::constants::TLS_AES_256_GCM_SHA384 => {
+                let key = hkdf_expand_label::<Sha384>(secret, b"key", b"", key_len);
+                let iv = hkdf_expand_label::<Sha384>(secret, b"iv", b"", nonce_len);
+                (key, iv)
+            }
+            _ => unimplemented!("cipher {:?} is not supported", self.cipher),
+        };
 
         Ok((key, iv))
     }
@@ -276,26 +150,29 @@ impl KeySpace {
     /// * `record`: the encrypted record, exclusive of the header
     /// * `sender`: the party who transmitted the record
     pub fn decrypt_record(&mut self, header: &RecordHeader, record: &[u8]) -> Vec<u8> {
+        use aes_gcm::aead::{Aead, Payload, generic_array::GenericArray};
+
         let (key, iv) = self.traffic_key().unwrap();
 
         let nonce = Self::calculate_nonce(iv, self.record_count);
         self.record_count += 1;
 
-        let unbound_key = aws_lc_rs::aead::UnboundKey::new(self.cipher.aead(), &key).unwrap();
-        let less_safe_key = aws_lc_rs::aead::LessSafeKey::new(unbound_key);
-
-        // Create a buffer that contains ciphertext + tag for in-place decryption
-        let mut output = record.to_vec();
-
-        // Decrypt the record
-        let nonce_obj = aws_lc_rs::aead::Nonce::try_assume_unique_for_key(&nonce).unwrap();
-
+        let nonce = GenericArray::from_slice(&nonce);
         let aad = header.encode_to_vec().unwrap();
+        let payload = Payload { msg: record, aad: &aad };
 
-        let plaintext = less_safe_key
-            .open_in_place(nonce_obj, aws_lc_rs::aead::Aad::from(aad), &mut output)
-            .unwrap();
-        plaintext.to_vec()
+        match self.cipher {
+            iana::constants::TLS_AES_128_GCM_SHA256 => {
+                Aes128Gcm::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
+            }
+            iana::constants::TLS_AES_256_GCM_SHA384 => {
+                Aes256Gcm::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
+            }
+            iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
+                ChaCha20Poly1305::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
+            }
+            _ => panic!("unsupported cipher: {:?}", self.cipher),
+        }
     }
 
     /// XOR the IV with the record count

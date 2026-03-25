@@ -23,7 +23,8 @@ brass-aphid-wire-messages = { version = "0.0.2", path = "../brass-aphid-wire-mes
 anyhow = "1.0.98"
 errno = "0.3"
 libc = "0.2.174"
-aws-lc-rs = "1.0.0"
+aes-gcm = "0.10.3"
+chacha20poly1305 = "0.10.1"
 hex = "0.4.3"
 openssl = {version = "0.10.73", features = ["vendored"]}
 # s2n-tls = {version = "0.3.21", features = ["unstable-testing"]}
