@@ -150,7 +150,7 @@ impl KeySpace {
     /// * `record`: the encrypted record, exclusive of the header
     /// * `sender`: the party who transmitted the record
     pub fn decrypt_record(&mut self, header: &RecordHeader, record: &[u8]) -> Vec<u8> {
-        use aes_gcm::aead::{Aead, Payload, generic_array::GenericArray};
+        use aes_gcm::aead::{generic_array::GenericArray, Aead, Payload};
 
         let (key, iv) = self.traffic_key().unwrap();
 
@@ -159,18 +159,24 @@ impl KeySpace {
 
         let nonce = GenericArray::from_slice(&nonce);
         let aad = header.encode_to_vec().unwrap();
-        let payload = Payload { msg: record, aad: &aad };
+        let payload = Payload {
+            msg: record,
+            aad: &aad,
+        };
 
         match self.cipher {
-            iana::constants::TLS_AES_128_GCM_SHA256 => {
-                Aes128Gcm::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
-            }
-            iana::constants::TLS_AES_256_GCM_SHA384 => {
-                Aes256Gcm::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
-            }
-            iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
-                ChaCha20Poly1305::new_from_slice(&key).unwrap().decrypt(nonce, payload).unwrap()
-            }
+            iana::constants::TLS_AES_128_GCM_SHA256 => Aes128Gcm::new_from_slice(&key)
+                .unwrap()
+                .decrypt(nonce, payload)
+                .unwrap(),
+            iana::constants::TLS_AES_256_GCM_SHA384 => Aes256Gcm::new_from_slice(&key)
+                .unwrap()
+                .decrypt(nonce, payload)
+                .unwrap(),
+            iana::constants::TLS_CHACHA20_POLY1305_SHA256 => ChaCha20Poly1305::new_from_slice(&key)
+                .unwrap()
+                .decrypt(nonce, payload)
+                .unwrap(),
             _ => panic!("unsupported cipher: {:?}", self.cipher),
         }
     }

@@ -87,13 +87,15 @@ impl ClientCapability for brass_aphid_wire_messages::protocol::ClientHello {
                     }
                 })
         };
-        let maybe_sigs = get_signatures(self).map(|s| hex_encode(&s)).unwrap_or_default();
+        let maybe_sigs = get_signatures(self)
+            .map(|s| hex_encode(&s))
+            .unwrap_or_default();
 
         let chunks = [
             hex_encode(&supported_protocols),
             hex_encode(&ciphers),
             maybe_groups,
-            maybe_sigs
+            maybe_sigs,
         ];
 
         chunks.join(",")

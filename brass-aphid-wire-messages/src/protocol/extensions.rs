@@ -47,7 +47,6 @@ pub enum ExtensionType {
     SupportedGroups = 10,
     EcPointFormats = 11,
     SignatureAlgorithms = 13,
-    UseSrtp = 14,
     Heartbeat = 15,
     ApplicationLayerProtocolNegotiation = 16,
     SignedCertificateTimestamp = 18,
@@ -164,11 +163,10 @@ pub struct ExtendedMasterSecret {}
 
 /// The "post_handshake_auth" extension is used to indicate that a client is
 /// willing to perform post-handshake authentication (Section 4.6.2).
-/// 
+///
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.6
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct PostHandshakeAuth {}
-
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5746#section-3.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
@@ -177,7 +175,7 @@ pub struct RenegotiationInfo {
 }
 
 /// https://www.rfc-editor.org/rfc/rfc6066#section-4
-#[derive(Debug, PartialEq, Eq, strum::EnumIter, DecodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
 #[repr(u8)]
 pub enum MaxFragmentLength {
     F512 = 1,
@@ -186,6 +184,12 @@ pub enum MaxFragmentLength {
     F4096 = 4,
 }
 impl_byte_value!(MaxFragmentLength, u8);
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.2
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct Cookie {
+    cookie: PrefixedBlob<u16>,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct KeyShare {
@@ -386,6 +390,51 @@ pub struct EncryptThenMac {}
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct SignedCertificateTimestampClientHello {}
 
+/// https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+enum CertificateType {
+    X509 = 0,
+    OpenPGP = 1,
+    RawPublicKey = 2,
+    N1609Dot2 = 3,
+}
+impl_byte_value!(CertificateType, u8);
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ClientCertTypeClientHello {
+    client_certificate_types: PrefixedList<CertificateType, u8>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ClientCertTypeServerHello {
+    client_certificate_type: CertificateType,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ServerCertTypeClientHello {
+    server_certificate_types: PrefixedList<CertificateType, u8>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ServerCertTypeServerHello {
+    server_certificate: CertificateType,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+struct DistinguishedName {
+    name: PrefixedBlob<u16>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct CertificateAuthorities {
+    authorities: PrefixedList<DistinguishedName, u16>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloExtensionData {
     PreSharedKey(PresharedKeyClientHello),
@@ -402,6 +451,11 @@ pub enum ClientHelloExtensionData {
     EarlyData(EarlyDataClientHello),
     PskKeyExchangeModes(PskKeyExchangeModes),
     RecordSizeLimit(RecordSizeLimit),
+    MaxFragmentLength(MaxFragmentLength),
+    Cookie(Cookie),
+    ServerCertificateType(ServerCertTypeClientHello),
+    ClientCertificateType(ClientCertTypeClientHello),
+    CertificateAuthorities(CertificateAuthorities),
     Padding(Padding),
     EncryptThenMac(EncryptThenMac),
     StatusRequest(CertificateStatus),
@@ -441,7 +495,10 @@ impl DecodeValue for ClientHelloExtension {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::PreSharedKey(value)
             }
-            ExtensionType::MaxFragmentLength => todo!(),
+            ExtensionType::MaxFragmentLength => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::MaxFragmentLength(value)
+            }
             ExtensionType::StatusRequest => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::StatusRequest(value)
@@ -458,7 +515,6 @@ impl DecodeValue for ClientHelloExtension {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureScheme(value)
             }
-            ExtensionType::UseSrtp => todo!(),
             ExtensionType::Heartbeat => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::Heartbeat(value)
@@ -471,8 +527,14 @@ impl DecodeValue for ClientHelloExtension {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignedCertificateTimestamp(value)
             }
-            ExtensionType::ClientCertificateType => todo!(),
-            ExtensionType::ServerCertificateType => todo!(),
+            ExtensionType::ClientCertificateType => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::ClientCertificateType(value)
+            }
+            ExtensionType::ServerCertificateType => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::ServerCertificateType(value)
+            }
             ExtensionType::Padding => {
                 let data = &extension.extension_data;
                 let (value, buffer) =
@@ -517,20 +579,26 @@ impl DecodeValue for ClientHelloExtension {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SupportedVersions(value)
             }
-            ExtensionType::Cookie => todo!(),
+            ExtensionType::Cookie => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::Cookie(value)
+            }
             ExtensionType::PskKeyExchangeModes => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::PskKeyExchangeModes(value)
             }
-            ExtensionType::CertificateAuthorities => todo!(),
+            ExtensionType::CertificateAuthorities => {
+                let value = extension.extension_data.blob().decode_value_exact()?;
+                ClientHelloExtensionData::CertificateAuthorities(value)
+            }
             ExtensionType::OidFilters => {
                 tracing::warn!("client is into some nasty, freaky stuff. Sent an oid_filters extension in the Client Hello");
                 ClientHelloExtensionData::Unknown(extension.extension_data.blob().to_vec())
-            },
+            }
             ExtensionType::PostHandshakeAuth => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::PostHandshakeAuth(value)
-            },
+            }
             ExtensionType::SignatureAlgorithmsCert => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureSchemeCert(value)
@@ -568,9 +636,14 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::SupportedVersions(e) => e.encode_to_vec(),
             ClientHelloExtensionData::SupportedGroups(e) => e.encode_to_vec(),
             ClientHelloExtensionData::KeyShare(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::Cookie(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::ClientCertificateType(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::ServerCertificateType(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::CertificateAuthorities(e) => e.encode_to_vec(),
             ClientHelloExtensionData::Unknown(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EcPointFormat(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::ExtendedMasterSecret(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::MaxFragmentLength(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::RenegotiationInfo(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::SessionTicket(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EarlyData(extension) => extension.encode_to_vec(),

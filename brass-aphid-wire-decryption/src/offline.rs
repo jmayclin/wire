@@ -61,7 +61,10 @@ mod tests {
     };
 
     use super::*;
-    use crate::{ClientCapability, decryption::{stream_decrypter::StreamDecrypter, transcript}};
+    use crate::{
+        decryption::{stream_decrypter::StreamDecrypter, transcript},
+        ClientCapability,
+    };
     use std::{path::PathBuf, str::FromStr};
 
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";

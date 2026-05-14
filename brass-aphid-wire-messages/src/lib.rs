@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use crate::protocol::{ContentType, HandshakeType, content_value::ContentValue};
+use crate::protocol::{content_value::ContentValue, ContentType, HandshakeType};
 
 pub mod codec;
 pub mod iana;

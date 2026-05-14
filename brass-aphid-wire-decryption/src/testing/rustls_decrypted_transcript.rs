@@ -5,7 +5,9 @@ use std::{
 };
 
 use crate::{
-    ClientCapability, decryption::{DecryptingPipe, Mode, key_manager::KeyManager}, testing::utilities::{ContentValueTestEquality, PemType, SigType, get_cert_path}
+    decryption::{key_manager::KeyManager, DecryptingPipe, Mode},
+    testing::utilities::{get_cert_path, ContentValueTestEquality, PemType, SigType},
+    ClientCapability,
 };
 use brass_aphid_wire_messages::protocol::{ContentType, HandshakeType};
 use rustls::{
@@ -132,7 +134,11 @@ fn rustls_client_test() -> anyhow::Result<()> {
         let client_hello = server_auth_transcript.client_hello().client_capability();
         println!("rustls client capability: {client_hello}");
 
-        let mut content = server_auth_transcript.content_transcript.lock().unwrap().clone();
+        let mut content = server_auth_transcript
+            .content_transcript
+            .lock()
+            .unwrap()
+            .clone();
         let mut messages = content.drain(..);
         for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
             let (actual_sender, actual_content) = messages.next().unwrap();

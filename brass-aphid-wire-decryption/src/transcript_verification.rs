@@ -4,7 +4,8 @@ use brass_aphid_wire_messages::{
     iana,
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
-        CertVerifyTls13, CertificateEntry, CertificateTls13, Finished, content_value::HandshakeMessageValue
+        content_value::HandshakeMessageValue, CertVerifyTls13, CertificateEntry, CertificateTls13,
+        Finished,
     },
 };
 use ecdsa::signature::Signer;
@@ -13,7 +14,7 @@ use hmac::EagerHash;
 use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256, Sha384};
 
-use crate::{decryption::key_space::hkdf_expand_label};
+use crate::decryption::key_space::hkdf_expand_label;
 
 //    +-----------+-------------------------+-----------------------------+
 //    | Mode      | Handshake Context       | Base Key                    |
