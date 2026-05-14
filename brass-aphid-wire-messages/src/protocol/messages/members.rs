@@ -34,6 +34,7 @@ pub mod server_key_exchange {
         /// Indicates that a named curve is used.  This option SHOULD be used when
         /// applicable.
         NamedCurve = 3,
+        Unknown(u8),
     }
     impl_byte_value!(ECCurveType, u8);
 
@@ -104,6 +105,12 @@ pub mod server_key_exchange {
                     let (value, buffer) = buffer.decode_value()?;
                     (EcBasisValue::Pentanomial(value), buffer)
                 }
+                EcBasisType::Unknown(v) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("unrecognized EC basis type {v}"),
+                    ));
+                }
             };
             let value = Self {
                 basis_type,
@@ -131,6 +138,7 @@ pub mod server_key_exchange {
     pub enum EcBasisType {
         Trinomial = 1,
         Pentanomial = 2,
+        Unknown(u8),
     }
     impl_byte_value!(EcBasisType, u8);
 
@@ -173,6 +181,12 @@ pub mod server_key_exchange {
                 ECCurveType::NamedCurve => {
                     let (value, buffer) = buffer.decode_value()?;
                     (EcCurveValue::NamedCurve(value), buffer)
+                }
+                ECCurveType::Unknown(v) => {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidInput,
+                        format!("unrecognized EC curve type {v}"),
+                    ));
                 }
             };
             let value = Self {

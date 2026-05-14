@@ -4,34 +4,50 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, Data, DeriveInput, Fields};
 
+/// Returns true if the enum has a variant named "Unknown" with exactly one unnamed field.
+fn has_unknown_variant(data: &syn::DataEnum) -> bool {
+    data.variants.iter().any(|v| {
+        v.ident == "Unknown"
+            && matches!(&v.fields, Fields::Unnamed(f) if f.unnamed.len() == 1)
+    })
+}
+
 /// Implement `EncodeValue` for an enum.
 ///
 /// The enum must have a `byte_value` method which returns the appropriate sized
 /// primitive for each variant.
 ///
-/// The generated implementation looks like the following.
-/// ```ignore
-/// impl EncodeValue for ContentType {
-///     fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
-///         self.byte_value().encode_to(buffer)
-///     }
-/// }
-/// ```
+/// If the enum has an `Unknown(T)` variant, the inner value is encoded directly
+/// for that variant.
 #[proc_macro_derive(EncodeEnum)]
 pub fn derive_encode_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = input.ident.clone();
 
-    let Data::Enum(_) = input.data else {
+    let Data::Enum(data_enum) = &input.data else {
         return syn::Error::new_spanned(input.ident, "EncodeEnum only supports enums")
             .to_compile_error()
             .into();
     };
 
-    let output = quote! {
-        impl EncodeValue for #enum_name {
-            fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
-                self.byte_value().encode_to(buffer)
+    let output = if has_unknown_variant(data_enum) {
+        quote! {
+            impl EncodeValue for #enum_name {
+                fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+                    if let Self::Unknown(v) = self {
+                        v.encode_to(buffer)
+                    } else {
+                        self.byte_value().encode_to(buffer)
+                    }
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl EncodeValue for #enum_name {
+                fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+                    self.byte_value().encode_to(buffer)
+                }
             }
         }
     };
@@ -39,45 +55,49 @@ pub fn derive_encode_enum(input: TokenStream) -> TokenStream {
     output.into()
 }
 
-/// Implement `DecodeValue` for an enum
+/// Implement `DecodeValue` for an enum.
 ///
-/// The enum must have defined a `byte_value()` method. The actual implementation
-/// looks like the following:
-/// ```ignore
-/// impl DecodeValue for ContentType {
-///     fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-///         let (value, buffer) = buffer.decode_value()?;
-///         match Self::iter().find(|e| e.byte_value() == value) {
-///             Some(valid) => Ok((valid, buffer)),
-///             None => Err(io::Error::new(
-///                 ErrorKind::InvalidInput,
-///                 format!("{} is not a valid {}", value, type_name::<Self>()),
-///             )),
-///         }
-///     }
-/// }
-/// ```
+/// The enum must have defined a `byte_value()` method and implement `strum::IntoEnumIterator`.
+///
+/// If the enum has an `Unknown(T)` variant, unrecognized values are stored in that
+/// variant instead of returning an error.
 #[proc_macro_derive(DecodeEnum)]
 pub fn derive_decode_enum(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let enum_name = input.ident.clone();
 
-    let Data::Enum(_) = input.data else {
+    let Data::Enum(data_enum) = &input.data else {
         return syn::Error::new_spanned(input.ident, "DecodeEnum only supports enums")
             .to_compile_error()
             .into();
     };
 
-    let output = quote! {
-        impl DecodeValue for #enum_name {
-            fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-                let (value, buffer) = buffer.decode_value()?;
-                match <Self as strum::IntoEnumIterator>::iter().find(|e| e.byte_value() == value) {
-                    Some(valid) => Ok((valid, buffer)),
-                    None => Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidInput,
-                        format!("{} is not a valid {}", value, std::any::type_name::<Self>()),
-                    )),
+    let output = if has_unknown_variant(data_enum) {
+        quote! {
+            impl DecodeValue for #enum_name {
+                fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+                    let (value, buffer) = buffer.decode_value()?;
+                    let result = <Self as strum::IntoEnumIterator>::iter()
+                        .find(|e| {
+                            !matches!(e, Self::Unknown(_)) && e.byte_value() == value
+                        })
+                        .unwrap_or(Self::Unknown(value));
+                    Ok((result, buffer))
+                }
+            }
+        }
+    } else {
+        quote! {
+            impl DecodeValue for #enum_name {
+                fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+                    let (value, buffer) = buffer.decode_value()?;
+                    match <Self as strum::IntoEnumIterator>::iter().find(|e| e.byte_value() == value) {
+                        Some(valid) => Ok((valid, buffer)),
+                        None => Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidInput,
+                            format!("{} is not a valid {}", value, std::any::type_name::<Self>()),
+                        )),
+                    }
                 }
             }
         }

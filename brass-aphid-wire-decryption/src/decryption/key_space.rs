@@ -14,7 +14,7 @@ trait DecryptionCipherExtension {
 
 impl DecryptionCipherExtension for iana::Cipher {
     fn aead(&self) -> &'static aws_lc_rs::aead::Algorithm {
-        match self.description {
+        match self.description().unwrap() {
             "TLS_AES_128_GCM_SHA256" => &aead::AES_128_GCM,
             "TLS_AES_256_GCM_SHA384" => &aead::AES_256_GCM,
             "TLS_CHACHA20_POLY1305_SHA256" => &aead::CHACHA20_POLY1305,
@@ -23,7 +23,7 @@ impl DecryptionCipherExtension for iana::Cipher {
     }
 
     fn hkdf(&self) -> aws_lc_rs::hkdf::Algorithm {
-        match self.description {
+        match self.description().unwrap() {
             "TLS_AES_128_GCM_SHA256" => hkdf::HKDF_SHA256,
             "TLS_AES_256_GCM_SHA384" => hkdf::HKDF_SHA384,
             "TLS_CHACHA20_POLY1305_SHA256" => hkdf::HKDF_SHA256,

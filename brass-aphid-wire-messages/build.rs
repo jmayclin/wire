@@ -21,32 +21,32 @@ fn main() {
     writeln!(f, "pub use super::Group;").unwrap();
 
     // Generate constants
-    for cipher in IANA_CIPHERS.iter() {
+    for &(value, description) in IANA_CIPHERS.iter() {
         writeln!(f, "#[allow(warnings)]").unwrap();
         writeln!(
             f,
-            "pub const {}: Cipher = Cipher {{ value: [{}, {}], description: \"{}\" }};",
-            cipher.description, cipher.value[0], cipher.value[1], cipher.description
+            "pub const {}: Cipher = Cipher {{ value: [{}, {}] }};",
+            description, value[0], value[1]
         )
         .unwrap();
     }
 
-    for sig_scheme in IANA_SIGNATURE_SCHEMES.iter() {
+    for &(value, description) in IANA_SIGNATURE_SCHEMES.iter() {
         writeln!(f, "#[allow(warnings)]").unwrap();
         writeln!(
             f,
-            "pub const {}: SignatureScheme = SignatureScheme {{ value: {}, description: \"{}\" }};",
-            sig_scheme.description, sig_scheme.value, sig_scheme.description
+            "pub const {}: SignatureScheme = SignatureScheme {{ value: {} }};",
+            description, value
         )
         .unwrap();
     }
 
-    for group in IANA_GROUPS.iter() {
+    for &(value, description) in IANA_GROUPS.iter() {
         writeln!(f, "#[allow(warnings)]").unwrap();
         writeln!(
             f,
-            "pub const {}: Group = Group {{ value: {}, description: \"{}\" }};",
-            group.description, group.value, group.description
+            "pub const {}: Group = Group {{ value: {} }};",
+            description, value
         )
         .unwrap();
     }

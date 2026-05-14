@@ -398,7 +398,7 @@ fn tls12() -> std::io::Result<()> {
         if let ServerKeyExchange::Ecdhe { params, signature } = key_exchange {
             assert_eq!(params.curve_params.curve_type, ECCurveType::NamedCurve);
             if let EcCurveValue::NamedCurve(group) = params.curve_params.curve_value {
-                assert_eq!(group.description, "secp256r1");
+                assert_eq!(group.description(), Some("secp256r1"));
             } else {
                 panic!("expected named curve");
             }

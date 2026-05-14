@@ -278,7 +278,7 @@ fn test_certificate_verify_1rtt() {
 
     // Verify the signature algorithm (0x0804 = rsa_pss_rsae_sha256)
     assert_eq!(cert_verify.algorithm.value, 0x0804);
-    assert_eq!(cert_verify.algorithm.description, "rsa_pss_rsae_sha256");
+    assert_eq!(cert_verify.algorithm.description(), Some("rsa_pss_rsae_sha256"));
 
     // Verify the signature is present
     assert!(!cert_verify.signature.blob().is_empty());
@@ -495,4 +495,64 @@ fn test_hello_retry_request() {
         has_key_share,
         "Key share extension should be present in HelloRetryRequest"
     );
+}
+
+/// A ClientHello with a garbage/unknown cipher suite value should parse successfully.
+/// The parser should gracefully tolerate unknown cipher suites.
+#[test]
+fn test_client_hello_with_unknown_cipher_suite() -> std::io::Result<()> {
+    // Minimal ClientHello: TLS 1.2 version, 32-byte random, empty session ID,
+    // one garbage cipher [0xFF, 0xFE], one compression method (null)
+    let mut client_hello_bytes: Vec<u8> = Vec::new();
+
+    // Handshake header: type=ClientHello(1), length placeholder
+    client_hello_bytes.push(0x01);
+    // We'll fill in the length after building the body
+    let length_pos = client_hello_bytes.len();
+    client_hello_bytes.extend_from_slice(&[0x00, 0x00, 0x00]); // placeholder
+
+    let body_start = client_hello_bytes.len();
+
+    // protocol_version: TLS 1.2 (0x0303)
+    client_hello_bytes.extend_from_slice(&[0x03, 0x03]);
+    // random: 32 bytes of zeros
+    client_hello_bytes.extend_from_slice(&[0x00; 32]);
+    // session_id: length 0
+    client_hello_bytes.push(0x00);
+    // cipher_suites: length 4 (2 ciphers), one known + one garbage
+    client_hello_bytes.extend_from_slice(&[0x00, 0x04]);
+    client_hello_bytes.extend_from_slice(&[0x13, 0x01]); // TLS_AES_128_GCM_SHA256
+    client_hello_bytes.extend_from_slice(&[0xFF, 0xFE]); // garbage cipher
+    // compression_methods: length 1, null
+    client_hello_bytes.extend_from_slice(&[0x01, 0x00]);
+    // extensions: length 0
+    client_hello_bytes.extend_from_slice(&[0x00, 0x00]);
+
+    // Patch the handshake length
+    let body_len = client_hello_bytes.len() - body_start;
+    client_hello_bytes[length_pos] = ((body_len >> 16) & 0xFF) as u8;
+    client_hello_bytes[length_pos + 1] = ((body_len >> 8) & 0xFF) as u8;
+    client_hello_bytes[length_pos + 2] = (body_len & 0xFF) as u8;
+
+    // Parse the handshake header
+    let (header, remaining) =
+        HandshakeMessageHeader::decode_from(&client_hello_bytes).unwrap();
+    assert_eq!(header.handshake_type, HandshakeType::ClientHello);
+
+    // This should succeed even with the unknown cipher suite
+    let (client_hello, _) = ClientHello::decode_from(remaining)?;
+
+    // Should have 2 ciphers
+    let ciphers = client_hello.supported_ciphers();
+    assert_eq!(ciphers.len(), 2);
+
+    // First cipher is known
+    assert_eq!(ciphers[0].value, [0x13, 0x01]);
+    assert_eq!(ciphers[0].description(), Some("TLS_AES_128_GCM_SHA256"));
+
+    // Second cipher is unknown - value is preserved, description is None
+    assert_eq!(ciphers[1].value, [0xFF, 0xFE]);
+    assert_eq!(ciphers[1].description(), None);
+
+    Ok(())
 }

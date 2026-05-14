@@ -149,6 +149,12 @@ impl HandshakeMessageValue {
                 (HandshakeMessageValue::KeyUpdate(message), buffer)
             }
             HandshakeType::MessageHash => todo!(),
+            HandshakeType::Unknown(v) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    format!("unrecognized handshake type {v}"),
+                ));
+            }
         };
 
         Ok((value, buffer))

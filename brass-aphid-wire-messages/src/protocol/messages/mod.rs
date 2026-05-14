@@ -358,6 +358,7 @@ pub struct Alert {
 #[repr(u8)]
 pub enum ChangeCipherSpec {
     ChangeCipherSpec = 1,
+    Unknown(u8),
 }
 impl_byte_value!(ChangeCipherSpec, u8);
 
@@ -383,13 +384,18 @@ pub enum SigHashOrScheme {
 
 impl DecodeValue for SigHashOrScheme {
     fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        // try to decode as a signature/hash algorithm
-        if let Ok((value, buffer)) = buffer.decode_value() {
-            Ok((Self::SignatureHash(value), buffer))
-        } else {
-            let (value, buffer) = buffer.decode_value()?;
-            Ok((Self::SignatureScheme(value), buffer))
+        // Try to decode as a signature/hash algorithm pair. Only accept it if
+        // both the hash and signature are recognized variants — otherwise treat
+        // the two bytes as a SignatureScheme value.
+        if let Ok((value, remaining)) = SignatureAndHashAlgorithm::decode_from(buffer) {
+            if !matches!(value.hash, HashAlgorithm::Unknown(_))
+                && !matches!(value.signature, SignatureAlgorithm::Unknown(_))
+            {
+                return Ok((Self::SignatureHash(value), remaining));
+            }
         }
+        let (value, buffer) = buffer.decode_value()?;
+        Ok((Self::SignatureScheme(value), buffer))
     }
 }
 
@@ -605,6 +611,7 @@ pub struct CertVerifyTls13 {
 pub enum KeyUpdateRequest {
     UpdateNotRequested = 0,
     UpdateRequested = 1,
+    Unknown(u8),
 }
 impl_byte_value!(KeyUpdateRequest, u8);
 

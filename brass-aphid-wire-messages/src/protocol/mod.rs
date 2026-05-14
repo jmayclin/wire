@@ -22,6 +22,7 @@ pub enum ContentType {
     Alert = 21,
     Handshake = 22,
     ApplicationData = 23,
+    Unknown(u8),
 }
 impl_byte_value!(ContentType, u8);
 
@@ -47,6 +48,7 @@ pub enum HandshakeType {
     Finished = 20,
     KeyUpdate = 24,
     MessageHash = 254,
+    Unknown(u8),
 }
 impl_byte_value!(HandshakeType, u8);
 
@@ -57,6 +59,7 @@ impl_byte_value!(HandshakeType, u8);
 pub enum AlertLevel {
     Warning = 1,
     Fatal = 2,
+    Unknown(u8),
 }
 impl_byte_value!(AlertLevel, u8);
 
@@ -101,6 +104,7 @@ pub enum AlertDescription {
     UnknownPSKIdentity = 115,
     CertificateRequired = 116,
     NoApplicationProtocol = 120,
+    Unknown(u8),
 }
 impl_byte_value!(AlertDescription, u8);
 

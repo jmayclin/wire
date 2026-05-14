@@ -96,10 +96,11 @@ impl DecodeValue for ExtensionType {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 enum NameType {
     Host = 0,
+    Unknown(u8),
 }
 impl_byte_value!(NameType, u8);
 
@@ -141,13 +142,14 @@ pub struct ServerSupportedVersions {
 }
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc4492#section-5.1.2
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum EcPointFormat {
     Uncompressed = 0,
     AnsiX962CompressedPrime = 1,
     AnsiX962CompressedChar2 = 2,
     /* Reserver 248..255 */
+    Unknown(u8),
 }
 impl_byte_value!(EcPointFormat, u8);
 
@@ -175,13 +177,14 @@ pub struct RenegotiationInfo {
 }
 
 /// https://www.rfc-editor.org/rfc/rfc6066#section-4
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum MaxFragmentLength {
     F512 = 1,
     F1024 = 2,
     F2048 = 3,
     F4096 = 4,
+    Unknown(u8),
 }
 impl_byte_value!(MaxFragmentLength, u8);
 
@@ -198,15 +201,6 @@ pub struct UseSrtpClientHello {
     pub srtp_mki: PrefixedBlob<u8>,
 }
 
-/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
-#[repr(u8)]
-pub enum CertificateType {
-    X509 = 0,
-    RawPublicKey = 2,
-}
-impl_byte_value!(CertificateType, u8);
-
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-4.1
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct CertificateTypeClientHello {
@@ -219,28 +213,18 @@ pub struct Cookie {
     pub cookie: PrefixedBlob<u16>,
 }
 
-/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct DistinguishedName {
-    pub name: PrefixedBlob<u16>,
-}
-
-/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct CertificateAuthoritiesExtension {
-    pub authorities: PrefixedList<DistinguishedName, u16>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct KeyShare {
     pub group: iana::Group,
     pub key_exchange: PrefixedBlob<u16>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+#[repr(u8)]
 pub enum PskKeyExchangeMode {
     PskKe = 0,
     PskDheKe = 1,
+    Unknown(u8),
 }
 impl_byte_value!(PskKeyExchangeMode, u8);
 
@@ -259,11 +243,12 @@ pub struct PskKeyExchangeModes {
 //    struct {
 //       HeartbeatMode mode;
 //    } HeartbeatExtension;
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum HeatbeatMode {
-    PeerAllowedToSend,
-    PeerNotAllowedToSend,
+    PeerAllowedToSend = 1,
+    PeerNotAllowedToSend = 2,
+    Unknown(u8),
 }
 impl_byte_value!(HeatbeatMode, u8);
 
@@ -384,10 +369,11 @@ pub struct PresharedKeyClientHello {
     pub binders: PrefixedList<PskBinderEntry, u16>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 enum CertificateStatusType {
     Ocsp = 1,
+    Unknown(u8),
 }
 impl_byte_value!(CertificateStatusType, u8);
 
@@ -432,11 +418,13 @@ pub struct SignedCertificateTimestampClientHello {}
 
 /// https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+#[repr(u8)]
 enum CertificateType {
     X509 = 0,
     OpenPGP = 1,
     RawPublicKey = 2,
     N1609Dot2 = 3,
+    Unknown(u8),
 }
 impl_byte_value!(CertificateType, u8);
 
@@ -503,12 +491,7 @@ pub enum ClientHelloExtensionData {
     Heartbeat(HeatbeatMode),
     ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation),
     PostHandshakeAuth(PostHandshakeAuth),
-    MaxFragmentLength(MaxFragmentLength),
     UseSrtp(UseSrtpClientHello),
-    ClientCertificateType(CertificateTypeClientHello),
-    ServerCertificateType(CertificateTypeClientHello),
-    Cookie(Cookie),
-    CertificateAuthorities(CertificateAuthoritiesExtension),
     Unknown(Vec<u8>),
 }
 
@@ -706,14 +689,7 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::ApplicationLayerProtocolNegotiation(extension) => {
                 extension.encode_to_vec()
             }
-            ClientHelloExtensionData::MaxFragmentLength(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::UseSrtp(extension) => extension.encode_to_vec(),
-            ClientHelloExtensionData::ClientCertificateType(extension) => extension.encode_to_vec(),
-            ClientHelloExtensionData::ServerCertificateType(extension) => extension.encode_to_vec(),
-            ClientHelloExtensionData::Cookie(extension) => extension.encode_to_vec(),
-            ClientHelloExtensionData::CertificateAuthorities(extension) => {
-                extension.encode_to_vec()
-            }
         }?;
         let length = extension_data.len() as u16;
         buffer.encode_value(&length)?;

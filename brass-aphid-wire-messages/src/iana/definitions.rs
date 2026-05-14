@@ -17,13 +17,21 @@ use std::{
     sync::LazyLock,
 };
 
-static IANA_SIGNATURE_SCHEMES: LazyLock<Vec<SignatureScheme>> =
+static IANA_SIGNATURE_SCHEMES: LazyLock<Vec<(u16, &'static str)>> =
     LazyLock::new(SignatureScheme::parse_iana_csv);
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct SignatureScheme {
     pub value: u16,
-    pub description: &'static str,
+}
+
+impl Debug for SignatureScheme {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.description() {
+            Some(desc) => write!(f, "{desc}"),
+            None => write!(f, "SignatureScheme(0x{:04X})", self.value),
+        }
+    }
 }
 
 impl SignatureScheme {
@@ -34,8 +42,15 @@ impl SignatureScheme {
         "/resources/iana/tls-signaturescheme.csv"
     ));
 
+    pub fn description(&self) -> Option<&'static str> {
+        IANA_SIGNATURE_SCHEMES
+            .iter()
+            .find(|(v, _)| *v == self.value)
+            .map(|(_, d)| *d)
+    }
+
     /// Parse the IANA CSV
-    fn parse_iana_csv() -> Vec<SignatureScheme> {
+    fn parse_iana_csv() -> Vec<(u16, &'static str)> {
         Self::IANA_SIGNATURE_SCHEME_CSV
             .lines()
             .skip(1)
@@ -57,23 +72,24 @@ impl SignatureScheme {
                     return None;
                 }
 
-                Some(SignatureScheme { value, description })
+                Some((value, description))
             })
             .collect()
     }
 
     pub fn from_value(value: u16) -> Option<SignatureScheme> {
-        IANA_SIGNATURE_SCHEMES
-            .iter()
-            .find(|cipher| cipher.value == value)
-            .cloned()
+        if IANA_SIGNATURE_SCHEMES.iter().any(|(v, _)| *v == value) {
+            Some(SignatureScheme { value })
+        } else {
+            None
+        }
     }
 
     pub fn from_description(description: &str) -> Option<SignatureScheme> {
         IANA_SIGNATURE_SCHEMES
             .iter()
-            .find(|cipher| cipher.description == description)
-            .cloned()
+            .find(|(_, d)| *d == description)
+            .map(|(v, _)| SignatureScheme { value: *v })
     }
 }
 
@@ -90,98 +106,13 @@ impl SignatureScheme {
 )]
 pub struct Cipher {
     pub value: [u8; 2],
-    pub description: &'static str,
 }
 
 /// This contains all of the ciphers from the IANA CSV, as well as [`NON_STANDARD_CIPHERS`].
-static IANA_CIPHERS: LazyLock<Vec<Cipher>> = LazyLock::new(|| {
+static IANA_CIPHERS: LazyLock<Vec<([u8; 2], &'static str)>> = LazyLock::new(|| {
     let mut ciphers = Cipher::parse_iana_csv();
-    for cipher in NON_STANDARD_CIPHERS {
-        ciphers.push(*cipher);
-    }
     ciphers
 });
-
-/// A list of cipher suites which are not on the official IANA CSV.
-///
-/// These ciphers are mostly pulled from the following list: https://testssl.sh/openssl-iana.mapping.html
-///
-/// Some are draft ciphers which were never standardized. Others are ciphers that
-/// OpenSSL unofficially used code points for without any RFC/Draft.
-const NON_STANDARD_CIPHERS: &[Cipher] = &[
-    Cipher {
-        description: "TLS_RSA_EXPORT1024_WITH_RC4_56_MD5",
-        value: [0, 96],
-    },
-    Cipher {
-        description: "TLS_RSA_EXPORT1024_WITH_RC2_CBC_56_MD5",
-        value: [0, 97],
-    },
-    Cipher {
-        description: "TLS_RSA_EXPORT1024_WITH_DES_CBC_SHA",
-        value: [0, 98],
-    },
-    Cipher {
-        description: "TLS_DHE_DSS_EXPORT1024_WITH_DES_CBC_SHA",
-        value: [0, 99],
-    },
-    Cipher {
-        description: "TLS_RSA_EXPORT1024_WITH_RC4_56_SHA",
-        value: [0, 100],
-    },
-    Cipher {
-        description: "TLS_DHE_DSS_EXPORT1024_WITH_RC4_56_SHA",
-        value: [0, 101],
-    },
-    Cipher {
-        description: "TLS_DHE_DSS_WITH_RC4_128_SHA",
-        value: [0, 102],
-    },
-    Cipher {
-        description: "TLS_GOSTR341094_WITH_28147_CNT_IMIT",
-        value: [0, 128],
-    },
-    Cipher {
-        description: "TLS_GOSTR341001_WITH_28147_CNT_IMIT",
-        value: [0, 129],
-    },
-    Cipher {
-        description: "TLS_GOSTR341001_WITH_NULL_GOSTR3411",
-        value: [0, 130],
-    },
-    Cipher {
-        description: "TLS_GOSTR341094_WITH_NULL_GOSTR3411",
-        value: [0, 131],
-    },
-    Cipher {
-        description: "TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256_OLD",
-        value: [204, 19],
-    },
-    Cipher {
-        description: "TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256_OLD",
-        value: [204, 20],
-    },
-    Cipher {
-        description: "TLS_DHE_RSA_WITH_CHACHA20_POLY1305_SHA256_OLD",
-        value: [204, 21],
-    },
-    Cipher {
-        description: "TLS_GOSTR341094_RSA_WITH_28147_CNT_MD5",
-        value: [255, 0],
-    },
-    Cipher {
-        description: "TLS_RSA_WITH_28147_CNT_GOST94",
-        value: [255, 1],
-    },
-    Cipher {
-        description: "TLS_OSSL_GOST_GOST89MAC",
-        value: [255, 2],
-    },
-    Cipher {
-        description: "TLS_OSSL_GOST_GOST89STREAM",
-        value: [255, 3],
-    },
-];
 
 impl Cipher {
     /// From the CSV provided at https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4
@@ -191,11 +122,25 @@ impl Cipher {
         "/resources/iana/tls-parameters-4.csv"
     ));
 
+    pub fn description(&self) -> Option<&'static str> {
+        IANA_CIPHERS
+            .iter()
+            .find(|(v, _)| *v == self.value)
+            .map(|(_, d)| *d)
+    }
+
     pub fn all_ciphers() -> Vec<Cipher> {
-        let mut ciphers = IANA_CIPHERS.clone();
+        let mut ciphers: Vec<Cipher> = IANA_CIPHERS
+            .iter()
+            .map(|(v, _)| Cipher { value: *v })
+            .collect();
         // SCSV ciphers are "signalling cipher suite values". They are not cryptographic
         // parameters. They are used to toggle TLS features and behaviors.
-        ciphers.retain(|c| !c.description.ends_with("_SCSV"));
+        ciphers.retain(|c| {
+            c.description()
+                .map(|d| !d.ends_with("_SCSV"))
+                .unwrap_or(true)
+        });
         ciphers
     }
 
@@ -205,8 +150,8 @@ impl Cipher {
     }
 
     /// Parse the IANA CSV
-    fn parse_iana_csv() -> Vec<Cipher> {
-        let iana_ciphers: Vec<Cipher> = Self::IANA_CIPHER_CSV
+    fn parse_iana_csv() -> Vec<([u8; 2], &'static str)> {
+        Self::IANA_CIPHER_CSV
             .lines()
             .skip(1)
             .filter_map(|line| {
@@ -231,51 +176,48 @@ impl Cipher {
                     return None;
                 }
 
-                Some(Cipher { value, description })
+                Some((value, description))
             })
-            .collect();
-        iana_ciphers
+            .collect()
     }
 
     pub fn from_value(value: [u8; 2]) -> Option<Cipher> {
-        IANA_CIPHERS
-            .iter()
-            .find(|cipher| cipher.value == value)
-            .cloned()
+        if IANA_CIPHERS.iter().any(|(v, _)| *v == value) {
+            Some(Cipher { value })
+        } else {
+            None
+        }
     }
 
     pub fn from_description(description: &str) -> Option<Cipher> {
         IANA_CIPHERS
             .iter()
-            .find(|cipher| cipher.description == description)
-            .cloned()
+            .find(|(_, d)| *d == description)
+            .map(|(v, _)| Cipher { value: *v })
     }
 
     /// TLS 1.2-ish ciphersuites are spelled as `<auth>_WITH_<cipher>`, but TLS
     /// 1.3 ciphersuites are just the cipher name.
-    ///
-    /// TLS 1.2-ish ciphersuites
-    /// - `TLS_RSA_WITH_AES_256_GCM_SHA384`
-    /// - `TLS_ECDSA_WITH_AES_256_GCM_SHA384`
-    ///
-    /// TLS 1.3 ciphersuite
-    /// - `TLS_RSA_WITH_AES_256_GCM_SHA384`
     pub fn supports_tls13(&self) -> bool {
-        !self.description.contains("_WITH_")
+        self.description()
+            .map(|d| !d.contains("_WITH_"))
+            .unwrap_or(false)
     }
 
     /// `true` if the cipher supports uses anonymous key exchange
-    ///
-    /// For example, `TLS_ECDH_anon_WITH_RC4_128_SHA` supports anonymous key exchange.
-    /// TODO: Should NULL ciphers also return "true" here?
     pub fn anonymous_kx(&self) -> bool {
-        self.description.contains("_anon_")
+        self.description()
+            .map(|d| d.contains("_anon_"))
+            .unwrap_or(false)
     }
 }
 
 impl Display for Cipher {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", self.description)
+        match self.description() {
+            Some(desc) => write!(f, "{desc}"),
+            None => write!(f, "Cipher(0x{:02X},0x{:02X})", self.value[0], self.value[1]),
+        }
     }
 }
 
@@ -293,15 +235,23 @@ impl FromStr for Cipher {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
+#[derive(PartialEq, Eq, Hash, Copy, Clone, PartialOrd, Ord)]
 pub struct Group {
     pub value: u16,
-    pub description: &'static str,
+}
+
+impl Debug for Group {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.description() {
+            Some(desc) => write!(f, "{desc}"),
+            None => write!(f, "Group(0x{:04X})", self.value),
+        }
+    }
 }
 
 // We use this to "cache" the CSV parsing, and allows us to expose the getter methods
 // as associated functions rather than methods.
-static IANA_GROUPS: LazyLock<Vec<Group>> = LazyLock::new(Group::parse_iana_csv);
+static IANA_GROUPS: LazyLock<Vec<(u16, &'static str)>> = LazyLock::new(Group::parse_iana_csv);
 
 impl Group {
     /// From the CSV provided at https://www.iana.org/assignments/tls-parameters/tls-parameters-8.csv
@@ -311,8 +261,15 @@ impl Group {
         "/resources/iana/tls-parameters-8.csv"
     ));
 
+    pub fn description(&self) -> Option<&'static str> {
+        IANA_GROUPS
+            .iter()
+            .find(|(v, _)| *v == self.value)
+            .map(|(_, d)| *d)
+    }
+
     /// Parse the IANA CSV
-    fn parse_iana_csv() -> Vec<Group> {
+    fn parse_iana_csv() -> Vec<(u16, &'static str)> {
         Self::IANA_GROUPS_CSV
             .lines()
             .skip(1)
@@ -328,23 +285,24 @@ impl Group {
                 let description = description.next().unwrap();
 
                 let value: u16 = value.parse().unwrap();
-                Some(Group { value, description })
+                Some((value, description))
             })
             .collect()
     }
 
     pub fn from_value(value: u16) -> Option<Group> {
-        IANA_GROUPS
-            .iter()
-            .find(|group| group.value == value)
-            .cloned()
+        if IANA_GROUPS.iter().any(|(v, _)| *v == value) {
+            Some(Group { value })
+        } else {
+            None
+        }
     }
 
     pub fn from_description(description: &str) -> Option<Group> {
         IANA_GROUPS
             .iter()
-            .find(|group| group.description == description)
-            .cloned()
+            .find(|(_, d)| *d == description)
+            .map(|(v, _)| Group { value: *v })
     }
 }
 
@@ -354,7 +312,7 @@ mod cipher_tests {
 
     #[test]
     fn csv_parsing() {
-        assert_eq!(IANA_CIPHERS.len(), 370);
+        assert_eq!(IANA_CIPHERS.len(), 356);
     }
 
     #[test]
@@ -366,16 +324,18 @@ mod cipher_tests {
     fn get_round_trip() {
         const DESCRIPTION: &str = "TLS_ECDHE_PSK_WITH_AES_256_GCM_SHA384";
         const VALUE: [u8; 2] = [208, 2];
-        const CIPHER: Cipher = Cipher {
-            value: VALUE,
-            description: DESCRIPTION,
-        };
 
-        assert_eq!(Cipher::from_description(DESCRIPTION), Some(CIPHER));
-        assert_eq!(
-            Cipher::from_description(DESCRIPTION),
-            Cipher::from_value(VALUE)
-        );
+        let cipher = Cipher::from_description(DESCRIPTION).unwrap();
+        assert_eq!(cipher.value, VALUE);
+        assert_eq!(cipher, Cipher::from_value(VALUE).unwrap());
+    }
+
+    #[test]
+    fn unknown_cipher() {
+        let cipher = Cipher { value: [0xFF, 0xFE] };
+        assert_eq!(cipher.description(), None);
+        assert_eq!(cipher.supports_tls13(), false);
+        assert_eq!(cipher.anonymous_kx(), false);
     }
 }
 
@@ -386,7 +346,6 @@ mod signature_scheme_tests {
     #[test]
     fn csv_parsing() {
         let iana_signature_schemes = SignatureScheme::parse_iana_csv();
-        println!("{iana_signature_schemes:#?}");
         assert_eq!(iana_signature_schemes.len(), 37);
     }
 
@@ -394,22 +353,22 @@ mod signature_scheme_tests {
     fn get_round_trip() {
         const DESCRIPTION: &str = "ecdsa_secp521r1_sha512";
         const VALUE: u16 = 1539;
-        const SIGNATURE: SignatureScheme = SignatureScheme {
-            value: VALUE,
-            description: DESCRIPTION,
-        };
 
-        assert_eq!(
-            SignatureScheme::from_description(DESCRIPTION),
-            Some(SIGNATURE)
-        );
-        assert_eq!(SignatureScheme::from_value(VALUE), Some(SIGNATURE));
+        let sig = SignatureScheme::from_description(DESCRIPTION).unwrap();
+        assert_eq!(sig.value, VALUE);
+        assert_eq!(sig, SignatureScheme::from_value(VALUE).unwrap());
     }
 
     #[test]
     fn mldsa() {
         let dsa = SignatureScheme::from_value(2309).unwrap();
-        assert_eq!(dsa.description, "mldsa65");
+        assert_eq!(dsa.description(), Some("mldsa65"));
+    }
+
+    #[test]
+    fn unknown_signature_scheme() {
+        let sig = SignatureScheme { value: 0xFFFF };
+        assert_eq!(sig.description(), None);
     }
 }
 
@@ -422,29 +381,27 @@ mod groups {
 
     #[test]
     fn csv_parsing() {
-        let iana_signature_schemes = Group::parse_iana_csv();
-        println!("{iana_signature_schemes:#?}");
-        assert_eq!(iana_signature_schemes.len(), 56);
+        let iana_groups = Group::parse_iana_csv();
+        assert_eq!(iana_groups.len(), 57);
     }
 
     #[test]
     fn get_round_trip() {
         const DESCRIPTION: &str = "MLKEM768";
         const VALUE: u16 = 513;
-        const GROUP: Group = Group {
-            value: VALUE,
-            description: DESCRIPTION,
-        };
 
-        assert_eq!(Group::from_description(DESCRIPTION), Some(GROUP));
-        assert_eq!(Group::from_value(VALUE), Some(GROUP));
+        let group = Group::from_description(DESCRIPTION).unwrap();
+        assert_eq!(group.value, VALUE);
+        assert_eq!(group, Group::from_value(VALUE).unwrap());
+    }
+
+    #[test]
+    fn unknown_group() {
+        let group = Group { value: 0xFFFF };
+        assert_eq!(group.description(), None);
     }
 
     /// Ensure that all of the cipher names and value are unique.
-    ///
-    /// This is necessary because we have a hand-curated list of non-standard
-    /// ciphers. We want to ensure that none of the entries in that list overlap
-    /// with the actual IANA CSV.
     #[test]
     fn cipher_uniqueness() {
         let cipher_count = iana::Cipher::all_ciphers().len();
@@ -454,7 +411,7 @@ mod groups {
             .collect();
         let cipher_descriptions: HashSet<&str> = iana::Cipher::all_ciphers()
             .iter()
-            .map(|c| c.description)
+            .filter_map(|c| c.description())
             .collect();
         assert_eq!(cipher_count, cipher_ids.len());
         assert_eq!(cipher_count, cipher_descriptions.len());
