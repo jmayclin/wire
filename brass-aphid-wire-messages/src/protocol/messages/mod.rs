@@ -69,6 +69,59 @@ impl ClientHello {
         None
     }
 
+    /// Returns the list of values in the supported versions extension, or the
+    /// single value in the client hello `protocol_version` field
+    pub fn supported_versions(&self) -> Vec<iana::Protocol> {
+        let supported_version = self
+            .extensions
+            .as_ref()
+            .map(|extensions| {
+                extensions
+                    .list()
+                    .iter()
+                    .map(|ext| &ext.extension_data)
+                    .find_map(|ext| {
+                        if let ClientHelloExtensionData::SupportedVersions(versions) = ext {
+                            Some(versions.versions.list().to_vec())
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .flatten();
+
+        if let Some(versions) = supported_version {
+            versions
+        } else {
+            vec![self.protocol_version]
+        }
+    }
+
+    /// Return the offered_ciphers field.
+    pub fn supported_ciphers(&self) -> Vec<iana::Cipher> {
+        self.offered_ciphers.list().to_vec()
+    }
+
+    /// Return the values from the signature_scheme extension.
+    pub fn supported_signatures(&self) -> Option<Vec<SigHashOrScheme>> {
+        self.extensions
+            .as_ref()
+            .map(|extensions| {
+                extensions
+                    .list()
+                    .iter()
+                    .map(|ext| &ext.extension_data)
+                    .find_map(|ext| {
+                        if let ClientHelloExtensionData::SignatureScheme(signatures) = ext {
+                            Some(signatures.supported_signature_algorithms.list().to_vec())
+                        } else {
+                            None
+                        }
+                    })
+            })
+            .flatten()
+    }
+
     /// Return the list of groups that the client sent key shares for
     pub fn key_share(&self) -> Option<Vec<iana::Group>> {
         for e in self.extensions.as_ref()?.list() {
@@ -504,7 +557,7 @@ impl DecodeValueWithContext for ServerKeyExchange {
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.4.4
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, EncodeStruct)]
 pub struct Finished {
     pub verify_data: Vec<u8>,
 }

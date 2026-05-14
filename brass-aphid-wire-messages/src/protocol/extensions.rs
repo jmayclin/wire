@@ -47,7 +47,6 @@ pub enum ExtensionType {
     SupportedGroups = 10,
     EcPointFormats = 11,
     SignatureAlgorithms = 13,
-    UseSrtp = 14,
     Heartbeat = 15,
     ApplicationLayerProtocolNegotiation = 16,
     SignedCertificateTimestamp = 18,
@@ -431,6 +430,51 @@ pub struct EncryptThenMac {}
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct SignedCertificateTimestampClientHello {}
 
+/// https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#tls-extensiontype-values-3
+#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, DecodeEnum, EncodeEnum)]
+enum CertificateType {
+    X509 = 0,
+    OpenPGP = 1,
+    RawPublicKey = 2,
+    N1609Dot2 = 3,
+}
+impl_byte_value!(CertificateType, u8);
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ClientCertTypeClientHello {
+    client_certificate_types: PrefixedList<CertificateType, u8>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ClientCertTypeServerHello {
+    client_certificate_type: CertificateType,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ServerCertTypeClientHello {
+    server_certificate_types: PrefixedList<CertificateType, u8>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct ServerCertTypeServerHello {
+    server_certificate: CertificateType,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+struct DistinguishedName {
+    name: PrefixedBlob<u16>,
+}
+
+/// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
+#[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+pub struct CertificateAuthorities {
+    authorities: PrefixedList<DistinguishedName, u16>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ClientHelloExtensionData {
     PreSharedKey(PresharedKeyClientHello),
@@ -447,6 +491,11 @@ pub enum ClientHelloExtensionData {
     EarlyData(EarlyDataClientHello),
     PskKeyExchangeModes(PskKeyExchangeModes),
     RecordSizeLimit(RecordSizeLimit),
+    MaxFragmentLength(MaxFragmentLength),
+    Cookie(Cookie),
+    ServerCertificateType(ServerCertTypeClientHello),
+    ClientCertificateType(ClientCertTypeClientHello),
+    CertificateAuthorities(CertificateAuthorities),
     Padding(Padding),
     EncryptThenMac(EncryptThenMac),
     StatusRequest(CertificateStatus),
@@ -511,10 +560,6 @@ impl DecodeValue for ClientHelloExtension {
             ExtensionType::SignatureAlgorithms => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
                 ClientHelloExtensionData::SignatureScheme(value)
-            }
-            ExtensionType::UseSrtp => {
-                let value = extension.extension_data.blob().decode_value_exact()?;
-                ClientHelloExtensionData::UseSrtp(value)
             }
             ExtensionType::Heartbeat => {
                 let value = extension.extension_data.blob().decode_value_exact()?;
@@ -637,9 +682,14 @@ impl EncodeValue for ClientHelloExtension {
             ClientHelloExtensionData::SupportedVersions(e) => e.encode_to_vec(),
             ClientHelloExtensionData::SupportedGroups(e) => e.encode_to_vec(),
             ClientHelloExtensionData::KeyShare(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::Cookie(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::ClientCertificateType(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::ServerCertificateType(e) => e.encode_to_vec(),
+            ClientHelloExtensionData::CertificateAuthorities(e) => e.encode_to_vec(),
             ClientHelloExtensionData::Unknown(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EcPointFormat(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::ExtendedMasterSecret(extension) => extension.encode_to_vec(),
+            ClientHelloExtensionData::MaxFragmentLength(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::RenegotiationInfo(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::SessionTicket(extension) => extension.encode_to_vec(),
             ClientHelloExtensionData::EarlyData(extension) => extension.encode_to_vec(),

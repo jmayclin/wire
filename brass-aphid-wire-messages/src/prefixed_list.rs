@@ -51,7 +51,7 @@ where
 
 impl<L> EncodeValue for PrefixedBlob<L>
 where
-    L: EncodeValue,
+    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue,
 {
     fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
         buffer.encode_value(&self.0)?;
@@ -73,7 +73,7 @@ pub struct PrefixedList<T, L> {
 
 impl<T, L> PrefixedList<T, L>
 where
-    L: Copy + Into<usize>,
+    L: Copy + Into<usize> + TryFrom<usize>,
 {
     /// The size of the list in bytes.
     ///
@@ -89,6 +89,13 @@ where
 
     pub fn into_inner(self) -> Vec<T> {
         self.items
+    }
+
+    pub fn new(elements: Vec<T>) -> Self {
+        Self {
+            length: elements.len().try_into().unwrap_or_else(|_| panic!("bad")),
+            items: elements,
+        }
     }
 }
 
@@ -166,10 +173,19 @@ where
 impl<T, L> EncodeValue for PrefixedList<T, L>
 where
     T: EncodeValue,
-    L: EncodeValue,
+    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue,
 {
     fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
-        buffer.encode_value(&self.length)?;
+        let mut elements = Vec::new();
+        for element in &self.items {
+            element.encode_to(&mut elements)?;
+        }
+        let size = elements.len();
+        let size: L = size
+            .try_into()
+            .map_err(|e| std::io::Error::new(ErrorKind::ArgumentListTooLong, "oops"))?;
+
+        buffer.encode_value(&size)?;
         for item in &self.items {
             buffer.encode_value(item)?;
         }

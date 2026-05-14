@@ -1,1 +1,1 @@
-cargo +nightly fuzz run no_panic
+cargo +nightly fuzz run client_hello

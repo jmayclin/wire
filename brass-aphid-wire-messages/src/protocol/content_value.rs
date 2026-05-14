@@ -1,7 +1,7 @@
 use std::io::ErrorKind;
 
 use crate::{
-    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
+    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext, EncodeValue},
     iana::{self, Protocol},
     protocol::{
         Alert, CertVerifyTls13, CertificateRequest, CertificateTls12ish, CertificateTls13,
@@ -198,5 +198,32 @@ impl DecodeValueWithContext for HandshakeMessageValue {
     ) -> std::io::Result<(Self, &[u8])> {
         let (protocol, cipher) = context;
         Self::base_decode(buffer, Some(protocol), Some(cipher))
+    }
+}
+
+impl EncodeValue for HandshakeMessageValue {
+    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+        let message = match self {
+            HandshakeMessageValue::ClientHello(content) => content.encode_to_vec(),
+            HandshakeMessageValue::ServerHelloConfusion(content) => content.encode_to_vec(),
+            HandshakeMessageValue::EncryptedExtensions(content) => content.encode_to_vec(),
+            HandshakeMessageValue::CertificateTls13(content) => content.encode_to_vec(),
+            HandshakeMessageValue::CertificateTls12ish(content) => content.encode_to_vec(),
+            HandshakeMessageValue::ServerKeyExchange(content) => unimplemented!(),
+            HandshakeMessageValue::CertVerifyTls13(content) => content.encode_to_vec(),
+            HandshakeMessageValue::CertificateRequestTls13(content) => content.encode_to_vec(),
+            HandshakeMessageValue::NewSessionTicketTls13(content) => content.encode_to_vec(),
+            HandshakeMessageValue::KeyUpdate(content) => content.encode_to_vec(),
+            HandshakeMessageValue::Finished(content) => content.encode_to_vec(),
+        }?;
+
+        let header = HandshakeMessageHeader {
+            handshake_type: self.handshake_type(),
+            handshake_message_length: message.len().try_into().unwrap(),
+        };
+
+        header.encode_to(buffer);
+        message.encode_to(buffer);
+        Ok(())
     }
 }
