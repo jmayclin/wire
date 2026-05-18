@@ -23,7 +23,8 @@ brass-aphid-wire-messages = { version = "0.0.5", path = "../brass-aphid-wire-mes
 anyhow = "1.0.98"
 errno = "0.3"
 libc = "0.2.174"
-aws-lc-rs = "1.0.0"
+aes-gcm = "0.10.3"
+chacha20poly1305 = "0.10.1"
 hex = "0.4.3"
 openssl = {version = "0.10.73", features = ["vendored"]}
 # s2n-tls = {version = "0.3.21", features = ["unstable-testing"]}
@@ -34,8 +35,19 @@ s2n-tls-sys = { version = "0.3.21", path = "/home/ubuntu/workspace/s2n-tls/bindi
 
 rustls = "0.23.29"
 openssl-sys = "0.9.109"
-sha2 = "0.10.9"
-hkdf = "0.12.4"
+
+############################ rust crypto crates ################################
+digest = "0.11.0-rc.9"
+sha2 = "0.11.0-rc.4"
+
+hkdf = "0.13.0-rc.4"
+hmac = "0.13.0-rc.4"
+
+p256 = "0.14.0-rc.6"
+p384 = "0.14.0-rc.6"
+elliptic-curve = "0.14.0-rc.24"
+ecdsa = "0.17.0-rc.14"
+signature = "3.0.0-rc.9"
 
 [dev-dependencies]
 tokio = { version = "1.48.0", features = ["full"] }

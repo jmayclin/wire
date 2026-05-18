@@ -13,7 +13,7 @@ use std::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
-struct TlsKeys {
+pub struct TlsKeys {
     /// TLS 1.3
     pub client_handshake_traffic_secret: Option<Vec<u8>>,
     pub server_handshake_traffic_secret: Option<Vec<u8>>,
@@ -60,7 +60,7 @@ impl TlsKeys {
 /// The `Pin` is necessary for safe use with s2n-tls, which will case the reference
 /// to a c_void pointer.
 #[derive(Debug, Clone)]
-pub struct KeyManager(Pin<Arc<Mutex<HashMap<Vec<u8>, TlsKeys>>>>);
+pub struct KeyManager(pub Pin<Arc<Mutex<HashMap<Vec<u8>, TlsKeys>>>>);
 
 impl Default for KeyManager {
     fn default() -> Self {
