@@ -141,7 +141,7 @@ impl ClientHello {
 }
 
 impl DecodeValue for ClientHello {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (protocol_version, buffer) = buffer.decode_value()?;
         let (random, buffer) = buffer.decode_value()?;
         let (session_id, buffer) = buffer.decode_value()?;
@@ -206,8 +206,10 @@ impl ServerHelloConfusionMode {
 
 // We don't impl EncodeValue, because this should only ever by a temporary value
 impl DecodeValue for ServerHelloConfusionMode {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let (_protocol, remaining) = Protocol::decode_from(buffer)?;
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        // Peek at the random field without consuming `buffer` so we can decode
+        // the full message from the original source once we know the variant.
+        let (_protocol, remaining) = Protocol::decode_from(buffer.freeze())?;
         let (random, _remaining) = <[u8; 32]>::decode_from(remaining)?;
         if random == HelloRetryRequest::RANDOM {
             let (hrr, remaining) = HelloRetryRequest::decode_from(buffer)?;
@@ -383,15 +385,19 @@ pub enum SigHashOrScheme {
 }
 
 impl DecodeValue for SigHashOrScheme {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         // Try to decode as a signature/hash algorithm pair. Only accept it if
         // both the hash and signature are recognized variants — otherwise treat
         // the two bytes as a SignatureScheme value.
-        if let Ok((value, remaining)) = SignatureAndHashAlgorithm::decode_from(buffer) {
+        //
+        // Peek via `freeze()` so we don't consume `buffer` before we know which
+        // variant to decode; both variants consume the same number of bytes.
+        if let Ok((value, _)) = SignatureAndHashAlgorithm::decode_from(buffer.freeze()) {
             if !matches!(value.hash, HashAlgorithm::Unknown(_))
                 && !matches!(value.signature, SignatureAlgorithm::Unknown(_))
             {
-                return Ok((Self::SignatureHash(value), remaining));
+                let (value, buffer) = SignatureAndHashAlgorithm::decode_from(buffer)?;
+                return Ok((Self::SignatureHash(value), buffer));
             }
         }
         let (value, buffer) = buffer.decode_value()?;
@@ -518,10 +524,10 @@ pub enum ServerKeyExchange {
 impl DecodeValueWithContext for ServerKeyExchange {
     type Context = iana::Cipher;
 
-    fn decode_from_with_context(
-        buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])> {
+    ) -> std::io::Result<(Self, S)> {
         let key_exchange = match context.key_exchange() {
             Some(kx) => kx,
             None => {
@@ -571,13 +577,13 @@ pub struct Finished {
 impl DecodeValueWithContext for Finished {
     type Context = iana::Cipher;
 
-    fn decode_from_with_context(
-        mut buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])> {
+    ) -> std::io::Result<(Self, S)> {
         let hash_size = context.hash().digest_size();
-        let mut verify_data = vec![0; hash_size];
-        buffer.read_exact(&mut verify_data)?;
+        let (verify_data, buffer) = buffer.pull(hash_size)?;
+        let verify_data = verify_data.freeze().to_vec();
 
         let value = Self { verify_data };
         Ok((value, buffer))

@@ -42,7 +42,7 @@ fn test_client_hello_1rtt() -> std::io::Result<()> {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&client_hello_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(client_hello_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::ClientHello);
@@ -107,7 +107,7 @@ fn test_server_hello_1rtt() {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&server_hello_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(server_hello_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::ServerHello);
@@ -172,7 +172,7 @@ fn test_encrypted_extensions_1rtt() {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&encrypted_extensions_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(encrypted_extensions_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(
@@ -225,7 +225,7 @@ fn test_certificate_1rtt() {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&certificate_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(certificate_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::Certificate);
@@ -265,7 +265,7 @@ fn test_certificate_verify_1rtt() {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&certificate_verify_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(certificate_verify_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(
@@ -317,7 +317,7 @@ fn test_client_hello_0rtt() -> std::io::Result<()> {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&client_hello_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(client_hello_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::ClientHello);
@@ -396,7 +396,7 @@ fn test_client_hello_hello_retry_request() -> std::io::Result<()> {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&client_hello_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(client_hello_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::ClientHello);
@@ -460,7 +460,7 @@ fn test_hello_retry_request() {
 
     // First parse the handshake message header
     let (handshake_header, remaining) =
-        HandshakeMessageHeader::decode_from(&hello_retry_request_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(hello_retry_request_bytes.as_slice()).unwrap();
 
     // Verify the handshake header
     assert_eq!(handshake_header.handshake_type, HandshakeType::ServerHello);
@@ -536,7 +536,7 @@ fn test_client_hello_with_unknown_cipher_suite() -> std::io::Result<()> {
 
     // Parse the handshake header
     let (header, remaining) =
-        HandshakeMessageHeader::decode_from(&client_hello_bytes).unwrap();
+        HandshakeMessageHeader::decode_from(client_hello_bytes.as_slice()).unwrap();
     assert_eq!(header.handshake_type, HandshakeType::ClientHello);
 
     // This should succeed even with the unknown cipher suite

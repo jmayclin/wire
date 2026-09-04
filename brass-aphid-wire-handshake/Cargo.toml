@@ -1,0 +1,9 @@
+[package]
+name = "brass-aphid-wire-handshake"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+brass-aphid-wire-macros = { version = "0.0.4", path = "../brass-aphid-wire-macros" }
+brass-aphid-wire-messages = { version = "0.0.5", path = "../brass-aphid-wire-messages" }

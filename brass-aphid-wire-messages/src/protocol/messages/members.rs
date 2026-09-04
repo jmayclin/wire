@@ -94,7 +94,7 @@ pub mod server_key_exchange {
     }
 
     impl DecodeValue for EcBasis {
-        fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
             let (basis_type, buffer) = buffer.decode_value()?;
             let (basis_value, buffer) = match basis_type {
                 EcBasisType::Trinomial => {
@@ -167,7 +167,7 @@ pub mod server_key_exchange {
     }
 
     impl DecodeValue for EcParameters {
-        fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
             let (curve_type, buffer) = ECCurveType::decode_from(buffer)?;
             let (named_curve_value, buffer) = match curve_type {
                 ECCurveType::ExplicitPrime => {
@@ -219,10 +219,10 @@ pub mod server_key_exchange {
         /// is included.
         type Context = iana::Cipher;
 
-        fn decode_from_with_context(
-            buffer: &[u8],
+        fn decode_from_with_context<S: DecodeByteSource>(
+            buffer: S,
             context: Self::Context,
-        ) -> std::io::Result<(Self, &[u8])> {
+        ) -> std::io::Result<(Self, S)> {
             if context.anonymous_kx() {
                 Ok((Self { signature: None }, buffer))
             } else {

@@ -75,7 +75,7 @@ pub fn derive_decode_enum(input: TokenStream) -> TokenStream {
     let output = if has_unknown_variant(data_enum) {
         quote! {
             impl DecodeValue for #enum_name {
-                fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+                fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
                     let (value, buffer) = buffer.decode_value()?;
                     let result = <Self as strum::IntoEnumIterator>::iter()
                         .find(|e| {
@@ -89,7 +89,7 @@ pub fn derive_decode_enum(input: TokenStream) -> TokenStream {
     } else {
         quote! {
             impl DecodeValue for #enum_name {
-                fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+                fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
                     let (value, buffer) = buffer.decode_value()?;
                     match <Self as strum::IntoEnumIterator>::iter().find(|e| e.byte_value() == value) {
                         Some(valid) => Ok((valid, buffer)),
@@ -113,7 +113,7 @@ pub fn derive_decode_enum(input: TokenStream) -> TokenStream {
 /// The resulting derivation looks like the following:
 /// ```ignore
 /// impl DecodeValue for HandshakeMessageHeader {
-///     fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+///     fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
 ///         let (handshake_type, buffer) = buffer.decode_value()?;
 ///         let (handshake_message_length, buffer) = buffer.decode_value()?;
 ///
@@ -159,7 +159,7 @@ pub fn derive_decode_struct(input: TokenStream) -> TokenStream {
 
     let output = quote! {
         impl DecodeValue for #struct_name {
-            fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+            fn decode_from<S: DecodeByteSource>(mut buffer: S) -> std::io::Result<(Self, S)> {
                 #(#decode_stmts)*
 
                 let result = Self {

@@ -104,7 +104,7 @@ fn tls12_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
 #[test]
 fn weird_group() {
     let weird: u16 = 2057;
-    let s = SigHashOrScheme::decode_from_exact(&weird.to_be_bytes()).unwrap();
+    let s = SigHashOrScheme::decode_from_exact(weird.to_be_bytes().as_slice()).unwrap();
 }
 
 /// Test a complete TLS 1.3 handshake with application data exchange

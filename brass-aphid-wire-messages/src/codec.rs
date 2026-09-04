@@ -15,13 +15,16 @@
 //! Ideally all of the codec stuff would be moved to a different crate, and we'd
 //! have proc macros to derive the `EncodeValue` and `DecodeValue` traits.
 
-use byteorder::{BigEndian, ReadBytesExt};
 use std::io::{self, ErrorKind, Read, Write};
 
 /// This trait defines a source that values can be decoded from.
-pub trait DecodeByteSource<T: DecodeValue>: Sized {
-    fn decode_value(&self) -> io::Result<(T, Self)>;
-    fn decode_value_exact(&self) -> io::Result<T>;
+pub trait DecodeByteSource: Sized {
+    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)>;
+    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T>;
+    fn is_empty(&self) -> bool;
+    fn len(&self) -> usize;
+    fn pull(self, length: usize) -> io::Result<(Self, Self)>;
+    fn freeze(&self) -> &[u8];
 }
 
 /// This trait defines a sink that values can be encoded to. Currently this is
@@ -36,13 +39,13 @@ pub trait EncodeBytesSink<T: EncodeValue>: Sized {
 /// This trait defines a type that can be decoded from bytes.
 pub trait DecodeValue: Sized {
     /// decode the value from a buffer of bytes, returning any remaining bytes.
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])>;
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)>;
 
     /// decode the value from a buffer of bytes, consuming the entire buffer.
     ///
     /// If there is data remaining in the buffer after decoding the value, an
     /// error is returned.
-    fn decode_from_exact(buffer: &[u8]) -> std::io::Result<Self> {
+    fn decode_from_exact<S: DecodeByteSource>(buffer: S) -> std::io::Result<Self> {
         let (value, remaining) = Self::decode_from(buffer)?;
         if remaining.is_empty() {
             Ok(value)
@@ -73,10 +76,10 @@ pub trait DecodeValue: Sized {
 pub trait DecodeValueWithContext: Sized {
     type Context;
 
-    fn decode_from_with_context(
-        buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])>;
+    ) -> std::io::Result<(Self, S)>;
 }
 
 /// This trait defines a type that can be encoded into bytes.
@@ -94,13 +97,67 @@ pub trait EncodeValue: Sized {
 
 //////////////////////////// Source + Sink Impls ///////////////////////////////
 
-impl<T: DecodeValue> DecodeByteSource<T> for &[u8] {
-    fn decode_value(&self) -> io::Result<(T, Self)> {
+impl DecodeByteSource for &[u8] {
+    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
         T::decode_from(self)
     }
 
-    fn decode_value_exact(&self) -> io::Result<T> {
+    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
         T::decode_from_exact(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        <[u8]>::is_empty(self)
+    }
+
+    fn len(&self) -> usize {
+        <[u8]>::len(self)
+    }
+
+    fn pull(self, length: usize) -> io::Result<(Self, Self)> {
+        if self.len() < length {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "no bytes remain",
+            ));
+        }
+        Ok(self.split_at(length))
+    }
+
+    fn freeze(&self) -> &[u8] {
+        self
+    }
+}
+
+impl DecodeByteSource for &mut [u8] {
+    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
+        T::decode_from(self)
+    }
+
+    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
+        T::decode_from_exact(self)
+    }
+
+    fn is_empty(&self) -> bool {
+        <[u8]>::is_empty(self)
+    }
+
+    fn len(&self) -> usize {
+        <[u8]>::len(self)
+    }
+
+    fn pull(self, length: usize) -> io::Result<(Self, Self)> {
+        if self.len() < length {
+            return Err(std::io::Error::new(
+                ErrorKind::InvalidInput,
+                "no bytes remain",
+            ));
+        }
+        Ok(self.split_at_mut(length))
+    }
+
+    fn freeze(&self) -> &[u8] {
+        self
     }
 }
 
@@ -111,32 +168,43 @@ impl<T: EncodeValue> EncodeBytesSink<T> for Vec<u8> {
 }
 
 //////////////////////////// Primitive Impls ///////////////////////////////////
-
 impl DecodeValue for u8 {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u8()?;
-        Ok((value, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
+        let value = value.freeze();
+        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
+        let value = Self::from_be_bytes(value);
+        Ok((value, remaining))
     }
 }
 
 impl DecodeValue for u16 {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u16::<BigEndian>()?;
-        Ok((value, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
+        let value = value.freeze();
+        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
+        let value = Self::from_be_bytes(value);
+        Ok((value, remaining))
     }
 }
 
 impl DecodeValue for u32 {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u32::<BigEndian>()?;
-        Ok((value, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
+        let value = value.freeze();
+        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
+        let value = Self::from_be_bytes(value);
+        Ok((value, remaining))
     }
 }
 
 impl DecodeValue for u64 {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u64::<BigEndian>()?;
-        Ok((value, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
+        let value = value.freeze();
+        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
+        let value = Self::from_be_bytes(value);
+        Ok((value, remaining))
     }
 }
 
@@ -171,10 +239,13 @@ impl EncodeValue for u64 {
 // Implement Decode and Encode for byte arrays
 
 impl<const L: usize> DecodeValue for [u8; L] {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let mut value = [0; L];
-        buffer.read_exact(&mut value)?;
-        Ok((value, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(L)?;
+        let value = value.freeze().try_into().map_err(|e| {
+            std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
+        })?;
+
+        Ok((value, remaining))
     }
 }
 
@@ -214,9 +285,16 @@ impl<T: EncodeValue> EncodeValue for Vec<T> {
 pub struct U24(pub u32);
 
 impl DecodeValue for U24 {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let u24 = buffer.read_u24::<BigEndian>()?;
-        Ok((U24(u24), buffer))
+    fn decode_from<S: DecodeByteSource>(mut buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.pull(3)?;
+        let value = value.freeze();
+        let value: [u8; 3] = value.try_into().map_err(|e| {
+            std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
+        })?;
+
+        // TODO: check the ordering on this one
+        let value = u32::from_be_bytes([0, value[0], value[1], value[2]]);
+        Ok((U24(value), remaining))
     }
 }
 
@@ -243,5 +321,43 @@ impl TryFrom<usize> for U24 {
 impl From<U24> for usize {
     fn from(val: U24) -> Self {
         val.0 as _
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        codec::{DecodeByteSource, EncodeValue},
+        protocol::RecordHeader,
+    };
+
+    fn record_header_then_123() -> Vec<u8> {
+        let record_header = RecordHeader {
+            content_type: crate::protocol::ContentType::ApplicationData,
+            protocol_version: crate::iana::Protocol::TLSv1_2,
+            record_length: 123,
+        };
+        let mut bytes = record_header.encode_to_vec().unwrap();
+        bytes.extend_from_slice(&[1, 2, 3]);
+        bytes
+    }
+
+    #[test]
+    fn immutable_decode() {
+        let buffer = record_header_then_123();
+        let buffer: &[u8] = buffer.as_slice();
+
+        let (_, remaining): (RecordHeader, &[u8]) =
+            buffer.decode_value::<RecordHeader>().unwrap();
+        assert_eq!(remaining, &[1, 2, 3]);
+    }
+
+    #[test]
+    fn mutable_decode() {
+        let mut buffer = record_header_then_123();
+        let buffer: &mut [u8] = buffer.as_mut_slice();
+
+        let (_, remaining): (RecordHeader, &mut [u8]) = buffer.decode_value().unwrap();
+        assert_eq!(remaining, &mut [1, 2, 3]);
     }
 }

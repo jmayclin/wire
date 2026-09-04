@@ -43,7 +43,7 @@ impl<L> DecodeValue for PrefixedBlob<L>
 where
     L: Copy + Into<usize> + DecodeValue,
 {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (inner, remaining) = buffer.decode_value()?;
         Ok((Self(inner), remaining))
     }
@@ -125,8 +125,8 @@ where
     L: Copy + Into<usize> + DecodeValue,
     T: DecodeValue,
 {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let (length, mut buffer): (L, &[u8]) = buffer.decode_value()?;
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (length, mut buffer): (L, S) = buffer.decode_value()?;
         let length_usize: usize = length.into();
 
         let current_buffer_size = buffer.len();

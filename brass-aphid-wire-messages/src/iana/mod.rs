@@ -12,24 +12,23 @@ pub use definitions::*;
 use std::io::Read;
 
 impl DecodeValue for SignatureScheme {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u16::<BigEndian>()?;
-        Ok((SignatureScheme { value }, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.decode_value()?;
+        Ok((SignatureScheme { value }, remaining))
     }
 }
 
 impl DecodeValue for Group {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let value = buffer.read_u16::<BigEndian>()?;
-        Ok((Group { value }, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.decode_value()?;
+        Ok((Group { value }, remaining))
     }
 }
 
 impl DecodeValue for Cipher {
-    fn decode_from(mut buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
-        let mut value = [0; 2];
-        buffer.read_exact(&mut value)?;
-        Ok((Cipher { value }, buffer))
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+        let (value, remaining) = buffer.decode_value()?;
+        Ok((Cipher { value }, remaining))
     }
 }
 

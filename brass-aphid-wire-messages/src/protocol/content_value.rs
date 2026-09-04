@@ -74,11 +74,11 @@ impl HandshakeMessageValue {
 
     // None when the plain "decode" implementation is used
     // Some when the decode_with_context impl is used
-    fn base_decode(
-        buffer: &[u8],
+    fn base_decode<S: DecodeByteSource>(
+        buffer: S,
         protocol: Option<Protocol>,
         cipher: Option<iana::Cipher>,
-    ) -> std::io::Result<(Self, &[u8])> {
+    ) -> std::io::Result<(Self, S)> {
         let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
         tracing::trace!("handshake message header: {message_header:?}");
         let (value, buffer) = match message_header.handshake_type {
@@ -190,7 +190,7 @@ fn needs_cipher(
 }
 
 impl DecodeValue for HandshakeMessageValue {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         Self::base_decode(buffer, None, None)
     }
 }
@@ -198,10 +198,10 @@ impl DecodeValue for HandshakeMessageValue {
 impl DecodeValueWithContext for HandshakeMessageValue {
     type Context = (Protocol, iana::Cipher);
 
-    fn decode_from_with_context(
-        buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])> {
+    ) -> std::io::Result<(Self, S)> {
         let (protocol, cipher) = context;
         Self::base_decode(buffer, Some(protocol), Some(cipher))
     }

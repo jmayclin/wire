@@ -85,7 +85,7 @@ impl EncodeValue for ExtensionType {
 }
 
 impl DecodeValue for ExtensionType {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (value, buffer) = u16::decode_from(buffer)?;
         let value = match ExtensionType::iter().find(|x| x.byte_value() == value) {
             Some(ExtensionType::Unknown(_)) => ExtensionType::Unknown(value),
@@ -263,12 +263,12 @@ impl DecodeValueWithContext for SessionTicket {
     /// the length of the extension data
     type Context = u16;
 
-    fn decode_from_with_context(
-        mut buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])> {
-        let mut ticket = vec![0; context as usize];
-        buffer.read_exact(&mut ticket)?;
+    ) -> std::io::Result<(Self, S)> {
+        let (ticket, buffer) = buffer.pull(context as usize)?;
+        let ticket = ticket.freeze().to_vec();
         let value = Self { ticket };
         Ok((value, buffer))
     }
@@ -285,12 +285,12 @@ impl DecodeValueWithContext for Padding {
     /// length of the extension data
     type Context = u16;
 
-    fn decode_from_with_context(
-        mut buffer: &[u8],
+    fn decode_from_with_context<S: DecodeByteSource>(
+        buffer: S,
         context: Self::Context,
-    ) -> std::io::Result<(Self, &[u8])> {
-        let mut padding = vec![0; context as usize];
-        buffer.read_exact(&mut padding)?;
+    ) -> std::io::Result<(Self, S)> {
+        let (padding, buffer) = buffer.pull(context as usize)?;
+        let padding = padding.freeze().to_vec();
         let value = Self { padding };
         Ok((value, buffer))
     }
@@ -504,7 +504,7 @@ pub struct ClientHelloExtension {
 impl ClientHelloExtension {
     pub fn raw_extension(&self) -> std::io::Result<Extension> {
         let buffer = self.encode_to_vec()?;
-        Extension::decode_from_exact(&buffer)
+        Extension::decode_from_exact(buffer.as_slice())
     }
 }
 
@@ -513,7 +513,7 @@ impl ClientHelloExtension {
 // TODO: would be run to look at the truncated hmac extension (who thought that was a good idea 😭)
 
 impl DecodeValue for ClientHelloExtension {
-    fn decode_from(buffer: &[u8]) -> std::io::Result<(Self, &[u8])> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (extension, buffer) = Extension::decode_from(buffer)?;
         let value = match extension.extension_type {
             ExtensionType::ServerName => {
