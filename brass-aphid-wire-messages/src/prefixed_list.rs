@@ -51,9 +51,9 @@ where
 
 impl<L> EncodeValue for PrefixedBlob<L>
 where
-    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue,
+    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue + Default,
 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.encode_value(&self.0)?;
         Ok(())
     }
@@ -173,22 +173,34 @@ where
 impl<T, L> EncodeValue for PrefixedList<T, L>
 where
     T: EncodeValue,
-    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue,
+    L: Copy + Into<usize> + TryFrom<usize> + EncodeValue + Default,
 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
-        let mut elements = Vec::new();
-        for element in &self.items {
-            element.encode_to(&mut elements)?;
-        }
-        let size = elements.len();
-        let size: L = size
-            .try_into()
-            .map_err(|e| std::io::Error::new(ErrorKind::ArgumentListTooLong, "oops"))?;
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
+        let size_start = buffer.position() as usize;
 
-        buffer.encode_value(&size)?;
-        for item in &self.items {
-            buffer.encode_value(item)?;
+        let size_placeholder = L::default();
+        buffer.encode_value(&size_placeholder)?;
+
+        let list_start = buffer.position() as usize;
+        
+        for element in &self.items {
+            buffer.encode_value(element)?;
         }
+
+        let list_end = buffer.position() as usize;
+
+        let list_len = list_end - list_start;
+        let size: L = list_len
+            .try_into()
+            .map_err(|_| std::io::Error::new(ErrorKind::ArgumentListTooLong, "oops"))?;
+
+        let mut size_spot = {
+            let range = &mut (*buffer.get_mut())[size_start..list_start];
+            std::io::Cursor::new(range)
+        };
+
+        // todo: encode_value_exact
+        size_spot.encode_value(&size)?;
         Ok(())
     }
 }

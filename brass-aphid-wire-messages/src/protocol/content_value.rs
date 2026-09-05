@@ -208,7 +208,7 @@ impl DecodeValueWithContext for HandshakeMessageValue {
 }
 
 impl EncodeValue for HandshakeMessageValue {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         let message = match self {
             HandshakeMessageValue::ClientHello(content) => content.encode_to_vec(),
             HandshakeMessageValue::ServerHelloConfusion(content) => content.encode_to_vec(),

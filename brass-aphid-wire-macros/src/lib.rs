@@ -33,7 +33,7 @@ pub fn derive_encode_enum(input: TokenStream) -> TokenStream {
     let output = if has_unknown_variant(data_enum) {
         quote! {
             impl EncodeValue for #enum_name {
-                fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+                fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
                     if let Self::Unknown(v) = self {
                         v.encode_to(buffer)
                     } else {
@@ -45,7 +45,7 @@ pub fn derive_encode_enum(input: TokenStream) -> TokenStream {
     } else {
         quote! {
             impl EncodeValue for #enum_name {
-                fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+                fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
                     self.byte_value().encode_to(buffer)
                 }
             }
@@ -181,7 +181,7 @@ pub fn derive_decode_struct(input: TokenStream) -> TokenStream {
 /// The resulting derivation looks like the following:
 /// ```ignore
 /// impl EncodeValue for HandshakeMessageHeader {
-///     fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+///     fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
 ///         buffer.encode_value(&self.handshake_type)?;
 ///         buffer.encode_value(&self.handshake_message_length)?;
 ///         Ok(())
@@ -218,7 +218,7 @@ pub fn derive_encode_struct(input: TokenStream) -> TokenStream {
 
     let output = quote! {
         impl EncodeValue for #struct_name {
-            fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+            fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
                 #(#encode_stmts)*
                 Ok(())
             }

@@ -33,19 +33,19 @@ impl DecodeValue for Cipher {
 }
 
 impl EncodeValue for SignatureScheme {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         self.value.encode_to(buffer)
     }
 }
 
 impl EncodeValue for Group {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         self.value.encode_to(buffer)
     }
 }
 
 impl EncodeValue for Cipher {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         self.value.encode_to(buffer)
     }
 }

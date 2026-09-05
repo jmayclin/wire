@@ -74,7 +74,7 @@ pub enum ExtensionType {
 impl_byte_value!(ExtensionType, u16);
 
 impl EncodeValue for ExtensionType {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         if let Self::Unknown(ext) = self {
             buffer.encode_value(ext)?
         } else {
@@ -655,7 +655,7 @@ impl DecodeValue for ClientHelloExtension {
 }
 
 impl EncodeValue for ClientHelloExtension {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.encode_value(&self.extension_type)?;
         let extension_data = match &self.extension_data {
             ClientHelloExtensionData::PreSharedKey(e) => e.encode_to_vec(),

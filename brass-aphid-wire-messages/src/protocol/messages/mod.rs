@@ -222,7 +222,7 @@ impl DecodeValue for ServerHelloConfusionMode {
 }
 
 impl EncodeValue for ServerHelloConfusionMode {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         match self {
             ServerHelloConfusionMode::ServerHello(server_hello) => server_hello.encode_to(buffer),
             ServerHelloConfusionMode::HelloRetryRequest(hello_retry_request) => {
@@ -406,7 +406,7 @@ impl DecodeValue for SigHashOrScheme {
 }
 
 impl EncodeValue for SigHashOrScheme {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         match self {
             SigHashOrScheme::SignatureScheme(value) => value.encode_to(buffer)?,
             SigHashOrScheme::SignatureHash(value) => value.encode_to(buffer)?,

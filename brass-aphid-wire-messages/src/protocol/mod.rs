@@ -110,7 +110,7 @@ impl_byte_value!(AlertDescription, u8);
 
 #[cfg(test)]
 mod tests {
-    use crate::codec::{DecodeByteSource, EncodeBytesSink};
+    use crate::codec::{CursorSplit, DecodeByteSource, EncodeBytesSink};
 
     #[test]
     fn decoding() -> std::io::Result<()> {
@@ -127,12 +127,16 @@ mod tests {
         assert_eq!(b, 0b1111111110101010);
         assert_eq!(c, 32);
 
-        let mut sink: Vec<u8> = Vec::new();
+        let mut sink_buffer = [0_u8; 256];
+        let mut sink = std::io::Cursor::new(sink_buffer.as_mut_slice());
+
         sink.encode_value(&a)?;
         sink.encode_value(&b)?;
         sink.encode_value(&c)?;
 
-        assert_eq!(sink, bytes);
+        let (written, remaining) = sink.split();
+
+        assert_eq!(written, bytes);
 
         Ok(())
     }

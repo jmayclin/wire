@@ -15,7 +15,21 @@
 //! Ideally all of the codec stuff would be moved to a different crate, and we'd
 //! have proc macros to derive the `EncodeValue` and `DecodeValue` traits.
 
-use std::io::{self, ErrorKind, Read, Write};
+use std::io::{self, Cursor, ErrorKind, Read, Write};
+
+use anyhow::Error;
+
+pub trait CursorSplit<'a> {
+    fn split(self: Self) -> (&'a mut [u8], &'a mut [u8]);
+}
+
+impl<'a> CursorSplit<'a> for std::io::Cursor<&'a mut [u8]> {
+    fn split(self) -> (&'a mut [u8], &'a mut [u8]) {
+        let position = self.position() as usize;
+        let inner = self.into_inner();
+        inner.split_at_mut(position)
+    }
+}
 
 /// This trait defines a source that values can be decoded from.
 pub trait DecodeByteSource: Sized {
@@ -84,13 +98,31 @@ pub trait DecodeValueWithContext: Sized {
 
 /// This trait defines a type that can be encoded into bytes.
 pub trait EncodeValue: Sized {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()>;
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()>;
 
     fn encode_to_vec(&self) -> std::io::Result<Vec<u8>> {
         const AVERAGE_LENGTH_GUESS: usize = 100;
 
-        let mut buffer = Vec::with_capacity(AVERAGE_LENGTH_GUESS);
-        self.encode_to(&mut buffer)?;
+        let mut buffer = vec![0; AVERAGE_LENGTH_GUESS];
+        let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
+        loop {
+            match self.encode_to(&mut cursor) {
+                Ok(_) => break,
+                Err(e) if e.kind() == ErrorKind::WriteZero => {
+                    let new_len = buffer.len() * 2;
+                    if new_len > 64_000 {
+                        return Err(std::io::Error::new(ErrorKind::InvalidData, "buffer would be too big"));
+                    }
+                    buffer = vec![0; buffer.len() * 2];
+                    cursor = std::io::Cursor::new(&mut buffer);
+                },
+                Err(e) => {
+                    return Err(e);
+                }
+            }
+        };
+        let written = cursor.position();
+        buffer.truncate(written as usize);
         Ok(buffer)
     }
 }
@@ -161,7 +193,7 @@ impl DecodeByteSource for &mut [u8] {
     }
 }
 
-impl<T: EncodeValue> EncodeBytesSink<T> for Vec<u8> {
+impl<T: EncodeValue> EncodeBytesSink<T> for Cursor<&mut [u8]> {
     fn encode_value(&mut self, value: &T) -> io::Result<()> {
         value.encode_to(self)
     }
@@ -209,28 +241,28 @@ impl DecodeValue for u64 {
 }
 
 impl EncodeValue for u8 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.write_all(&[*self])?;
         Ok(())
     }
 }
 
 impl EncodeValue for u16 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.write_all(&self.to_be_bytes())?;
         Ok(())
     }
 }
 
 impl EncodeValue for u32 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.write_all(&self.to_be_bytes())?;
         Ok(())
     }
 }
 
 impl EncodeValue for u64 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.write_all(&self.to_be_bytes())?;
         Ok(())
     }
@@ -250,7 +282,7 @@ impl<const L: usize> DecodeValue for [u8; L] {
 }
 
 impl<const L: usize> EncodeValue for [u8; L] {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.write_all(self)?;
         Ok(())
     }
@@ -261,7 +293,7 @@ impl<const L: usize> EncodeValue for [u8; L] {
 // Can't safely implement Decode for Option<T>, it requires domain logic to implement.
 
 impl<T: EncodeValue> EncodeValue for Option<T> {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         if let Some(v) = self {
             v.encode_to(buffer)?
         }
@@ -270,7 +302,7 @@ impl<T: EncodeValue> EncodeValue for Option<T> {
 }
 
 impl<T: EncodeValue> EncodeValue for Vec<T> {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         for item in self {
             item.encode_to(buffer)?;
         }
@@ -299,7 +331,7 @@ impl DecodeValue for U24 {
 }
 
 impl EncodeValue for U24 {
-    fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
         let bytes = self.0.to_be_bytes();
         // nothing should be in the most significant byte
         assert_eq!(bytes[0], 0);

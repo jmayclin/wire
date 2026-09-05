@@ -121,7 +121,7 @@ pub mod server_key_exchange {
     }
 
     impl EncodeValue for EcBasis {
-        fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+        fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
             self.basis_type.encode_to(buffer)?;
             match &self.basis_value {
                 EcBasisValue::Trinomial(value) => value.encode_to(buffer),
@@ -198,7 +198,7 @@ pub mod server_key_exchange {
     }
 
     impl EncodeValue for EcParameters {
-        fn encode_to(&self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+        fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
             self.curve_type.encode_to(buffer)?;
             match &self.curve_value {
                 EcCurveValue::ExplicitPrime(value) => value.encode_to(buffer),
