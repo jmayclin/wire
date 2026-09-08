@@ -71,3 +71,6 @@ Currently the feature set is relatively limited, and the code is loaded with ~~p
 - [ ] switch to RustCrypto instead of AWS-LC for skinniness (and WASM support)
 - [ ] separate `brass-aphid-wire` into two crates, one for message codecs, and one for the decryption logic
 - [ ] move all of the trace functionality into it's own crate.
+
+
+Design philosophy around public members: don't be stupid. Like, you _probably_ shouldn't touch anything internal unless you know what you're doing.

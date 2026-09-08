@@ -17,12 +17,11 @@ pub use messages::*;
 #[derive(Debug, Copy, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum ContentType {
-    Invalid = 0,
     ChangeCipherSpec = 20,
     Alert = 21,
     Handshake = 22,
     ApplicationData = 23,
-    Unknown(u8),
+    // RFC has a thing saying that I don't have to deal with the nasty types
 }
 impl_byte_value!(ContentType, u8);
 

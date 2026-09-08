@@ -344,7 +344,6 @@ impl TlsStream {
             stream.len()
         );
         let (value, buffer) = match content_type {
-            ContentType::Invalid | ContentType::Unknown(_) => panic!("invalid"),
             ContentType::ChangeCipherSpec => {
                 let (ccs, record_buffer) = ChangeCipherSpec::decode_from(buffer)?;
                 (ContentValue::ChangeCipherSpec(ccs), record_buffer)
