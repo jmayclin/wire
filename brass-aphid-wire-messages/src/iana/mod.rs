@@ -211,6 +211,16 @@ impl Cipher {
             None
         }
     }
+
+    pub fn key_len(&self) -> Option<u16> {
+        use crate::iana::constants;
+        match *self {
+            constants::TLS_AES_256_GCM_SHA384 => Some(32),
+            constants::TLS_AES_128_GCM_SHA256 => Some(16),
+            constants::TLS_CHACHA20_POLY1305_SHA256 => Some(32),
+            _ => None,
+        }
+    }
 }
 
 #[cfg(test)]

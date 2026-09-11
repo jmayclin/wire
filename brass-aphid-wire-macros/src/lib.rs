@@ -7,8 +7,7 @@ use syn::{parse_macro_input, Data, DeriveInput, Fields};
 /// Returns true if the enum has a variant named "Unknown" with exactly one unnamed field.
 fn has_unknown_variant(data: &syn::DataEnum) -> bool {
     data.variants.iter().any(|v| {
-        v.ident == "Unknown"
-            && matches!(&v.fields, Fields::Unnamed(f) if f.unnamed.len() == 1)
+        v.ident == "Unknown" && matches!(&v.fields, Fields::Unnamed(f) if f.unnamed.len() == 1)
     })
 }
 

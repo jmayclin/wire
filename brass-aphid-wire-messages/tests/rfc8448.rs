@@ -278,7 +278,10 @@ fn test_certificate_verify_1rtt() {
 
     // Verify the signature algorithm (0x0804 = rsa_pss_rsae_sha256)
     assert_eq!(cert_verify.algorithm.value, 0x0804);
-    assert_eq!(cert_verify.algorithm.description(), Some("rsa_pss_rsae_sha256"));
+    assert_eq!(
+        cert_verify.algorithm.description(),
+        Some("rsa_pss_rsae_sha256")
+    );
 
     // Verify the signature is present
     assert!(!cert_verify.signature.blob().is_empty());
@@ -523,7 +526,7 @@ fn test_client_hello_with_unknown_cipher_suite() -> std::io::Result<()> {
     client_hello_bytes.extend_from_slice(&[0x00, 0x04]);
     client_hello_bytes.extend_from_slice(&[0x13, 0x01]); // TLS_AES_128_GCM_SHA256
     client_hello_bytes.extend_from_slice(&[0xFF, 0xFE]); // garbage cipher
-    // compression_methods: length 1, null
+                                                         // compression_methods: length 1, null
     client_hello_bytes.extend_from_slice(&[0x01, 0x00]);
     // extensions: length 0
     client_hello_bytes.extend_from_slice(&[0x00, 0x00]);

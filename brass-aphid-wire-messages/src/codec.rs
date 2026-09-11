@@ -33,9 +33,15 @@ impl<'a> CursorSplit<'a> for std::io::Cursor<&'a mut [u8]> {
 
 /// This trait defines a source that values can be decoded from.
 pub trait DecodeByteSource: Sized {
-    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)>;
-    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T>;
-    fn is_empty(&self) -> bool;
+    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
+        T::decode_from(self)
+    }
+    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
+        T::decode_from_exact(self)
+    }
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     fn len(&self) -> usize;
     fn pull(self, length: usize) -> io::Result<(Self, Self)>;
     fn freeze(&self) -> &[u8];
@@ -94,6 +100,24 @@ pub trait DecodeValueWithContext: Sized {
         buffer: S,
         context: Self::Context,
     ) -> std::io::Result<(Self, S)>;
+
+    fn decode_from_with_context_exact<S: DecodeByteSource>(
+        buffer: S,
+        context: Self::Context,
+    ) -> std::io::Result<Self> {
+        let (value, remaining) = Self::decode_from_with_context(buffer, context)?;
+        if remaining.is_empty() {
+            Ok(value)
+        } else {
+            Err(std::io::Error::new(
+                ErrorKind::InvalidData,
+                format!(
+                    "unexpected data remaining: {} bytes to be read",
+                    remaining.len()
+                ),
+            ))
+        }
+    }
 }
 
 /// This trait defines a type that can be encoded into bytes.
@@ -111,16 +135,19 @@ pub trait EncodeValue: Sized {
                 Err(e) if e.kind() == ErrorKind::WriteZero => {
                     let new_len = buffer.len() * 2;
                     if new_len > 64_000 {
-                        return Err(std::io::Error::new(ErrorKind::InvalidData, "buffer would be too big"));
+                        return Err(std::io::Error::new(
+                            ErrorKind::InvalidData,
+                            "buffer would be too big",
+                        ));
                     }
                     buffer = vec![0; buffer.len() * 2];
                     cursor = std::io::Cursor::new(&mut buffer);
-                },
+                }
                 Err(e) => {
                     return Err(e);
                 }
             }
-        };
+        }
         let written = cursor.position();
         buffer.truncate(written as usize);
         Ok(buffer)
@@ -130,18 +157,6 @@ pub trait EncodeValue: Sized {
 //////////////////////////// Source + Sink Impls ///////////////////////////////
 
 impl DecodeByteSource for &[u8] {
-    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
-        T::decode_from(self)
-    }
-
-    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
-        T::decode_from_exact(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        <[u8]>::is_empty(self)
-    }
-
     fn len(&self) -> usize {
         <[u8]>::len(self)
     }
@@ -162,18 +177,6 @@ impl DecodeByteSource for &[u8] {
 }
 
 impl DecodeByteSource for &mut [u8] {
-    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
-        T::decode_from(self)
-    }
-
-    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
-        T::decode_from_exact(self)
-    }
-
-    fn is_empty(&self) -> bool {
-        <[u8]>::is_empty(self)
-    }
-
     fn len(&self) -> usize {
         <[u8]>::len(self)
     }
@@ -192,6 +195,26 @@ impl DecodeByteSource for &mut [u8] {
         self
     }
 }
+
+// impl DecodeByteSource for Cursor<&mut [u8]> {
+//     fn len(&self) -> usize {
+//         self.get_ref().len() - (self.position() as usize)
+//     }
+
+//     fn pull(self, length: usize) -> io::Result<(Self, Self)> {
+//         if self.len() < length {
+//             return Err(std::io::Error::new(
+//                 ErrorKind::InvalidInput,
+//                 "no bytes remain",
+//             ));
+//         }
+//         Ok(self.split_at_mut(length))
+//     }
+
+//     fn freeze(&self) -> &[u8] {
+//         self
+//     }
+// }
 
 impl<T: EncodeValue> EncodeBytesSink<T> for Cursor<&mut [u8]> {
     fn encode_value(&mut self, value: &T) -> io::Result<()> {
@@ -379,8 +402,7 @@ mod tests {
         let buffer = record_header_then_123();
         let buffer: &[u8] = buffer.as_slice();
 
-        let (_, remaining): (RecordHeader, &[u8]) =
-            buffer.decode_value::<RecordHeader>().unwrap();
+        let (_, remaining): (RecordHeader, &[u8]) = buffer.decode_value::<RecordHeader>().unwrap();
         assert_eq!(remaining, &[1, 2, 3]);
     }
 

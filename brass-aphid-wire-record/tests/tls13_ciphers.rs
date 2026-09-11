@@ -26,13 +26,41 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use openssl::ssl::{
-    ErrorCode, Ssl, SslContext, SslFiletype, SslMethod, SslVerifyMode, SslVersion,
+use brass_aphid_wire_messages::{
+    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
+    iana,
+    protocol::{content_value::HandshakeMessageValue, ContentType, HandshakeType},
 };
+use brass_aphid_wire_record::{Payload, Plaintext, RecordProtocol, RecordProtocolBehavior};
+use openssl::ssl::{ErrorCode, Ssl, SslContext, SslFiletype, SslMethod, SslVerifyMode, SslVersion};
 use serde::{Deserialize, Serialize};
 
 const CERT_DIR: &str = "../certs/rsa2048";
 const APP_DATA: &[u8] = b"hello from the openssl client";
+
+/// https://nss-crypto.org/reference/security/nss/legacy/key_log_format/index.html
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NssLog {
+    /// e.g. "CLIENT_HANDSHAKE_TRAFFIC_SECRET"
+    pub label: String,
+    pub client_random: Vec<u8>,
+    pub secret: Vec<u8>,
+}
+
+impl NssLog {
+    pub fn from_log_line(log_line: &str) -> Self {
+        let parts: Vec<&str> = log_line.split_whitespace().collect();
+        if parts.len() != 3 {
+            panic!("unacceptable line {log_line}");
+        }
+
+        Self {
+            label: parts[0].to_string(),
+            client_random: hex::decode(parts[1]).unwrap(),
+            secret: hex::decode(parts[2]).unwrap(),
+        }
+    }
+}
 
 /// The three mandatory-to-implement TLS 1.3 cipher suites. The string is the
 /// OpenSSL cipher-suite name passed to `set_ciphersuites`, which also doubles
@@ -48,9 +76,9 @@ const TLS13_CIPHERS: &[&str] = &[
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 enum Direction {
     /// Bytes the server read off the wire (sent by the client).
-    ServerRead,
+    ClientTx,
     /// Bytes the server wrote to the wire (destined for the client).
-    ServerWrite,
+    ServerTx,
 }
 
 /// A single chunk of raw bytes that crossed the server's transport, recorded in
@@ -78,9 +106,48 @@ struct Conversation {
     /// OpenSSL cipher-suite name, e.g. "TLS_AES_128_GCM_SHA256".
     cipher: String,
     /// The raw bytes the server read and wrote, in wire order.
-    events: Vec<WireEvent>,
+    events: Vec<(Direction, Vec<u8>)>,
     /// The NSS key-log lines produced during the handshake (one secret each).
-    nss_key_log: Vec<String>,
+    nss_key_log: Vec<NssLog>,
+}
+
+impl Conversation {
+    /// ossl tx does the same thing as s2n-tls: 5 byte read followed by remaining
+    /// record read. That's tedious for me, so we consolidate those
+    fn coalesce(&mut self) {
+        let mut coalesced = Vec::new();
+
+        let mut individual = {
+            let mut events = self.events.clone();
+            events.reverse();
+            events
+        };
+
+        let mut current = individual.pop().unwrap();
+        while let Some(next) = individual.pop() {
+            if current.0 == next.0 {
+                current.1.extend_from_slice(&next.1);
+            } else {
+                coalesced.push(current);
+                current = next;
+            }
+        }
+
+        self.events = coalesced;
+    }
+
+    pub fn next_client_tx(&mut self) -> Vec<u8> {
+        let (event, direction) = self.events.remove(0);
+        assert_eq!(event, Direction::ClientTx);
+        direction
+    }
+
+    pub fn next_server_tx(&mut self) -> Vec<u8> {
+        let (event, direction) = self.events.remove(0);
+        println!("trying to get server tx: {event:?}, {}", direction.len());
+        assert_eq!(event, Direction::ServerTx);
+        direction
+    }
 }
 
 /// A one-directional, in-memory byte queue shared between the two endpoints.
@@ -101,7 +168,10 @@ impl Read for MemoryTransport {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let mut queue = self.inbound.borrow_mut();
         if queue.is_empty() {
-            return Err(io::Error::new(io::ErrorKind::WouldBlock, "no data available"));
+            return Err(io::Error::new(
+                io::ErrorKind::WouldBlock,
+                "no data available",
+            ));
         }
         let n = queue.len().min(buf.len());
         for slot in buf.iter_mut().take(n) {
@@ -127,7 +197,7 @@ impl Write for MemoryTransport {
 /// on the wire and what it emitted.
 struct RecordingTransport {
     inner: MemoryTransport,
-    events: Rc<RefCell<Vec<WireEvent>>>,
+    events: Rc<RefCell<Vec<(Direction, Vec<u8>)>>>,
 }
 
 impl Read for RecordingTransport {
@@ -136,7 +206,7 @@ impl Read for RecordingTransport {
         if n > 0 {
             self.events
                 .borrow_mut()
-                .push(WireEvent::new(Direction::ServerRead, &buf[..n]));
+                .push((Direction::ClientTx, buf[..n].to_vec()));
         }
         Ok(n)
     }
@@ -148,7 +218,7 @@ impl Write for RecordingTransport {
         if n > 0 {
             self.events
                 .borrow_mut()
-                .push(WireEvent::new(Direction::ServerWrite, &buf[..n]));
+                .push((Direction::ServerTx, buf[..n].to_vec()));
         }
         Ok(n)
     }
@@ -210,7 +280,7 @@ fn record_conversation(cipher: &str) -> Conversation {
     let client_to_server: Wire = Rc::new(RefCell::new(VecDeque::new()));
     let server_to_client: Wire = Rc::new(RefCell::new(VecDeque::new()));
 
-    let events: Rc<RefCell<Vec<WireEvent>>> = Rc::new(RefCell::new(Vec::new()));
+    let events: Rc<RefCell<Vec<(Direction, Vec<u8>)>>> = Rc::new(RefCell::new(Vec::new()));
 
     let server_transport = RecordingTransport {
         inner: MemoryTransport {
@@ -224,16 +294,10 @@ fn record_conversation(cipher: &str) -> Conversation {
         outbound: client_to_server.clone(),
     };
 
-    let mut server = openssl::ssl::SslStream::new(
-        Ssl::new(&server_ctx).unwrap(),
-        server_transport,
-    )
-    .unwrap();
-    let mut client = openssl::ssl::SslStream::new(
-        Ssl::new(&client_ctx).unwrap(),
-        client_transport,
-    )
-    .unwrap();
+    let mut server =
+        openssl::ssl::SslStream::new(Ssl::new(&server_ctx).unwrap(), server_transport).unwrap();
+    let mut client =
+        openssl::ssl::SslStream::new(Ssl::new(&client_ctx).unwrap(), client_transport).unwrap();
 
     // ----- drive the handshake on a single thread -----------------------------
     let mut client_done = false;
@@ -285,7 +349,11 @@ fn record_conversation(cipher: &str) -> Conversation {
             Err(e) => panic!("server read failed for {cipher}: {e:?}"),
         }
     }
-    assert_eq!(&received[..filled], APP_DATA, "app data mismatch for {cipher}");
+    assert_eq!(
+        &received[..filled],
+        APP_DATA,
+        "app data mismatch for {cipher}"
+    );
 
     // ----- shut down, capturing the close_notify alerts -----------------------
     // Best-effort: pump both directions so the close_notify records land in the
@@ -296,13 +364,21 @@ fn record_conversation(cipher: &str) -> Conversation {
     }
 
     let events = events.borrow().clone();
-    let nss_key_log = key_log.lock().unwrap().clone();
+    let nss_key_log = key_log
+        .lock()
+        .unwrap()
+        .clone()
+        .iter()
+        .map(|s| NssLog::from_log_line(s))
+        .collect();
 
-    Conversation {
+    let mut conversation = Conversation {
         cipher: cipher.to_string(),
         events,
         nss_key_log,
-    }
+    };
+    conversation.coalesce();
+    conversation
 }
 
 #[test]
@@ -319,14 +395,14 @@ fn generate_tls13_record_fixtures() {
             conversation
                 .events
                 .iter()
-                .any(|e| e.direction == Direction::ServerRead),
+                .any(|e| e.0 == Direction::ClientTx),
             "{cipher}: no bytes read by server"
         );
         assert!(
             conversation
                 .events
                 .iter()
-                .any(|e| e.direction == Direction::ServerWrite),
+                .any(|e| e.0 == Direction::ServerTx),
             "{cipher}: no bytes written by server"
         );
         // A TLS 1.3 endpoint logs 5 secrets: client/server handshake,
@@ -350,12 +426,196 @@ fn generate_tls13_record_fixtures() {
     }
 }
 
+#[test]
+fn tls13_decryption() -> std::io::Result<()> {
+    for cipher in TLS13_CIPHERS {
+        let mut conversation = record_conversation(cipher);
+        let cipher = iana::Cipher::from_description(*cipher).unwrap();
+
+        let mut client_tx = RecordProtocol {
+            state: Plaintext::new(),
+        };
+        let mut server_tx = RecordProtocol {
+            state: Plaintext::new(),
+        };
+
+        let mut buffer = vec![0_u8; 16_000];
+        let mut cursor = std::io::Cursor::new(buffer.as_mut_slice());
+
+        // client plaintext record - client hello
+        {
+            let mut client_hello = conversation.next_client_tx();
+            let (mut payload, remaining) =
+                client_tx.decapsulate_bytes(&mut client_hello, &mut cursor)?;
+            assert!(remaining.is_empty());
+
+            let payload = payload.assert_handshake();
+            let hs = payload.decode_value_exact::<HandshakeMessageValue>()?;
+            assert_eq!(hs.handshake_type(), HandshakeType::ClientHello);
+        }
+        cursor.set_position(0);
+
+        // server first flight - 2 record
+        {
+            // plaintext record: client hello
+            let mut server_hello = conversation.next_server_tx();
+            let (mut payload, remaining) =
+                server_tx.decapsulate_bytes(&mut server_hello, &mut cursor)?;
+            let payload = payload.assert_handshake();
+            let hs = HandshakeMessageValue::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type(), HandshakeType::ServerHello);
+
+            // plaintext record: CCS
+            let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
+            let result = payload.assert_ccs();
+
+            let secret = conversation
+                .nss_key_log
+                .iter()
+                .find(|log| log.label == "SERVER_HANDSHAKE_TRAFFIC_SECRET")
+                .cloned()
+                .unwrap()
+                .secret;
+            let mut server_tx = server_tx.select_tls13(cipher, &secret);
+
+            // Encrypted Record: EncryptedExtensions
+            let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
+            let payload = payload.assert_handshake();
+            let hs = HandshakeMessageValue::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type(), HandshakeType::EncryptedExtensions);
+
+            // Encrypted Record: Certificate
+            let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
+            let payload = payload.assert_handshake();
+            let hs = HandshakeMessageValue::decode_from_with_context_exact(
+                payload,
+                (iana::Protocol::TLSv1_3, cipher),
+            )?;
+            assert_eq!(hs.handshake_type(), HandshakeType::Certificate);
+
+            // Encrypted Record: Certificate Verify
+            let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
+            let payload = payload.assert_handshake();
+            let hs = HandshakeMessageValue::decode_from_exact(payload)
+                .unwrap()
+                .handshake_type();
+            assert_eq!(hs, HandshakeType::CertificateVerify);
+
+            // Encrypted Record: Finished
+            let (mut payload, remaining) =
+                server_tx.decapsulate_bytes(remaining, &mut cursor).unwrap();
+            let payload = payload.assert_handshake();
+            let hs = HandshakeMessageValue::decode_from_with_context_exact(
+                payload,
+                (iana::Protocol::TLSv1_3, cipher),
+            )?;
+            assert_eq!(hs.handshake_type(), HandshakeType::Finished);
+
+            // let client_responses = conversation.next_client_tx();
+        }
+    }
+
+    Ok(())
+}
+
+/// Round-trip a single record: decapsulate it with `decrypter` to recover the
+/// plaintext payload, then re-encapsulate that payload with an identically-keyed
+/// `encrypter` and assert we reproduce the original record byte-for-byte.
+///
+/// `decrypter` and `encrypter` must be *separate* protocol instances seeded with
+/// the same secret. They each maintain their own record sequence number, so
+/// sharing one instance across both directions would desync the AEAD nonce.
+///
+/// Returns the bytes remaining after the consumed record.
+fn roundtrip_record<'r, D, E>(
+    decrypter: &mut RecordProtocol<D>,
+    encrypter: &mut RecordProtocol<E>,
+    record: &'r [u8],
+) -> &'r [u8]
+where
+    D: RecordProtocolBehavior,
+    E: RecordProtocolBehavior,
+{
+    // decapsulate to recover the inner content type + plaintext payload.
+    let mut plaintext = vec![0u8; 16_000];
+    let mut plaintext_cursor = std::io::Cursor::new(plaintext.as_mut_slice());
+    let (mut payload, remaining) = decrypter
+        .decapsulate_bytes(record, &mut plaintext_cursor)
+        .unwrap();
+
+    let consumed = record.len() - remaining.len();
+    let original = &record[..consumed];
+
+    let (content_type, payload_bytes) = match &mut payload {
+        Payload::Application(bytes) => (ContentType::ApplicationData, &**bytes),
+        Payload::Handshake(bytes) => (ContentType::Handshake, &**bytes),
+        Payload::Alert(bytes) => (ContentType::Alert, &**bytes),
+        Payload::CCS(bytes) => (ContentType::ChangeCipherSpec, &**bytes),
+    };
+
+    // re-encapsulate the payload and compare against the record we started with.
+    let mut produced = vec![0u8; 16_000];
+    let mut produced_cursor = std::io::Cursor::new(produced.as_mut_slice());
+    encrypter.encapsulate_bytes(content_type, payload_bytes, &mut produced_cursor);
+    let produced = &produced_cursor.get_ref()[..produced_cursor.position() as usize];
+
+    assert_eq!(
+        produced, original,
+        "re-encapsulated record did not match the original"
+    );
+
+    remaining
+}
 
 #[test]
-fn tls13_ciphers() {
+fn tls13_encryption() -> std::io::Result<()> {
     for cipher in TLS13_CIPHERS {
-        let conversation = record_conversation(cipher);
+        let mut conversation = record_conversation(cipher);
+        let cipher = iana::Cipher::from_description(*cipher).unwrap();
 
-        
+        // We reproduce the *server's* first flight. Two protocol instances per
+        // direction: one to decrypt the recorded bytes back into plaintext, and
+        // an identically-keyed one to re-encrypt that plaintext. If our record
+        // encoder is correct the re-encrypted bytes are identical to what
+        // OpenSSL originally put on the wire.
+        let mut server_tx_dec = RecordProtocol {
+            state: Plaintext::new(),
+        };
+        let mut server_tx_enc = RecordProtocol {
+            state: Plaintext::new(),
+        };
+
+        // the transcript opens with the client's ClientHello record; skip it so
+        // we're positioned at the server's first flight.
+        let _client_hello = conversation.next_client_tx();
+
+        let server_flight = conversation.next_server_tx();
+        let remaining = server_flight.as_slice();
+
+        // plaintext record: ServerHello
+        let remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
+
+        // plaintext record: ChangeCipherSpec
+        let remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
+
+        // switch both protocols over to the encrypted (handshake) epoch.
+        let secret = conversation
+            .nss_key_log
+            .iter()
+            .find(|log| log.label == "SERVER_HANDSHAKE_TRAFFIC_SECRET")
+            .cloned()
+            .unwrap()
+            .secret;
+        let mut server_tx_dec = server_tx_dec.select_tls13(cipher, &secret);
+        let mut server_tx_enc = server_tx_enc.select_tls13(cipher, &secret);
+
+        // encrypted records: EncryptedExtensions, Certificate, CertificateVerify,
+        // Finished. Each is decrypted then re-encrypted and compared byte-exact.
+        let remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
+        let remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
+        let remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
+        let _remaining = roundtrip_record(&mut server_tx_dec, &mut server_tx_enc, remaining);
     }
+
+    Ok(())
 }

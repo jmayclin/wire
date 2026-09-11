@@ -182,7 +182,7 @@ where
         buffer.encode_value(&size_placeholder)?;
 
         let list_start = buffer.position() as usize;
-        
+
         for element in &self.items {
             buffer.encode_value(element)?;
         }

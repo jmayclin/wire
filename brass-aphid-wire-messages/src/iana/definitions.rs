@@ -332,7 +332,9 @@ mod cipher_tests {
 
     #[test]
     fn unknown_cipher() {
-        let cipher = Cipher { value: [0xFF, 0xFE] };
+        let cipher = Cipher {
+            value: [0xFF, 0xFE],
+        };
         assert_eq!(cipher.description(), None);
         assert_eq!(cipher.supports_tls13(), false);
         assert_eq!(cipher.anonymous_kx(), false);
