@@ -179,6 +179,16 @@ pub trait RecordProtocolBehavior {
     ) -> ContentType;
 }
 
+/// Plaintext records are always used for the Client Hello and Server Hello in
+/// all protocol versions. Additionally, legacy TLS (TLS 1.0 -> TLS 1.2) use plaintex
+/// records for all of the handshake phase.
+/// 
+/// ### Record Structure
+/// ```text
+/// 5 byte record header    plaintext payload
+///     v                       v 
+/// |hhhhh|------------------------------------|
+/// ```
 pub struct Plaintext {
     /// should not be TLS 1.3
     pub record_header_version: Protocol,
