@@ -219,6 +219,18 @@ impl Tls13Cipher {
     }
 }
 
+
+/// TLS 1.3 Encrypted Records
+/// 
+/// ### Record Structure
+/// ```text
+/// 5 byte record header    ciphertext ("payload")         final 16 bytes is aead tag
+///     v                       v                                      v  
+/// |hhhhh|xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx|
+/// |hhhhh|-------------------------------------------------C00000000|
+///             ^                                           ^     ^
+///        plaintext payload                 real content type    padding
+/// ```
 pub struct Tls13 {
     cipher: Tls13Cipher,
     record_count: u64,

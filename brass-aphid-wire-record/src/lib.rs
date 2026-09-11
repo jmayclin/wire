@@ -53,23 +53,13 @@ pub use tls13::Tls13;
 
 use brass_aphid_wire_messages::{
     codec::{DecodeByteSource, DecodeValue, EncodeBytesSink},
-    iana::{self, Cipher, Protocol},
-    prefixed_list::PrefixedBlob,
+    iana::{self, Protocol},
     protocol::{ContentType, RecordHeader},
 };
 
 pub struct Record<T> {
     pub header: RecordHeader,
     pub payload: T,
-}
-
-// TODO: maybe this can be used to
-fn reborrow<'a, 'b>(original: &'a mut Record<&'b mut [u8]>) -> Record<&'a [u8]> {
-    let buffer = original.payload.as_ref();
-    Record {
-        header: original.header.clone(),
-        payload: buffer,
-    }
 }
 
 /// we unfortunately implement DecodeValue here, because the generic is in the
@@ -114,9 +104,11 @@ impl Payload<'_> {
     }
 }
 
-struct Tls13RecordState {}
-
 /// The top level record protocol is responsible for record framing and dispatch
+/// 
+/// It is _not_ aware of when the underlying state should be switched. That must
+/// be managed by a higher level construct. Generally you need a higher level 
+/// Connection struct which intercepts non-application data and handle it appropriately
 pub struct RecordProtocol<T> {
     pub state: T,
 }
@@ -201,7 +193,7 @@ impl Plaintext {
 }
 
 #[derive(Debug)]
-enum RecordError {
+pub enum RecordError {
     InvalidHeader,
     InsufficientSpace,
 }
@@ -223,13 +215,12 @@ impl RecordProtocolBehavior for Plaintext {
             protocol_version: self.record_header_version,
             record_length: payload.len() as u16,
         };
-        output.encode_value(&header);
-        output.write_all(&payload);
+        output.encode_value(&header).unwrap();
+        output.write_all(&payload).unwrap();
 
         Ok(())
     }
 
-    // If you can work inside a single record or incrementally, prefer
     // what's the performance difference between AES-GCM decrypting in place vs
     // decrypting to another thing? I think that _if_ you are going to make the
     // copy, then folks would prefer to have an explicit out buffer? And that decrpt_in_place
@@ -243,7 +234,7 @@ impl RecordProtocolBehavior for Plaintext {
         record: Record<&[u8]>,
         plaintext_out: &mut Cursor<&mut [u8]>,
     ) -> ContentType {
-        plaintext_out.write_all(record.payload);
+        plaintext_out.write_all(record.payload).unwrap();
         record.header.content_type
     }
 }
