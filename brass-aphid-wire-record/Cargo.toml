@@ -16,6 +16,7 @@ hkdf = "0.13.0"
 s2n-tls-sys = "0.3.43"
 chacha20poly1305 = "0.11.0"
 aes-gcm = "0.11.1"
+tracing = "0.1.44"
 
 [dev-dependencies]
 hex = "0.4.3"

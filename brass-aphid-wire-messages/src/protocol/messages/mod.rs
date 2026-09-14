@@ -459,7 +459,7 @@ pub struct CertificateTls12ish {
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.3.1
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct EncryptedExtensions {
-    pub extensions: PrefixedBlob<u16>,
+    pub extensions: PrefixedList<Extension, u16>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.3.2

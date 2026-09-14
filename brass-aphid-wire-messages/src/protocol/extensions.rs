@@ -23,11 +23,20 @@ use std::io::{ErrorKind, Read};
 use strum::IntoEnumIterator;
 
 /// This is the "basic" extension struct. Any extension will be able to be parsed
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+#[derive(Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 pub struct Extension {
     // TODO: emit metrics whenever we see an extension type that isn't recognized
     pub extension_type: ExtensionType,
     pub extension_data: PrefixedBlob<u16>,
+}
+
+impl std::fmt::Debug for Extension {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Extension")
+            .field("extension_type", &self.extension_type)
+            .field("extension_data(len)", &self.extension_data.blob().len())
+            .finish()
+    }
 }
 
 /// Extensions can be sent in many messages, including but not limited to

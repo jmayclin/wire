@@ -38,12 +38,6 @@
 //! Cons
 //! - doesn't support partial application reads ("let me read 5 bytes from the peer" - not allowed)
 //! - two buffers instead of one
-//!
-//!
-//!
-//!
-//!
-//! ##
 
 mod tls13;
 
@@ -208,11 +202,6 @@ pub enum RecordError {
     InsufficientSpace,
 }
 
-// simplest path
-// 1. network -> application buffer
-
-// network -> tls record buffer -> decrypt into application buffer
-
 impl RecordProtocolBehavior for Plaintext {
     fn encap_record(
         &mut self,
@@ -246,20 +235,5 @@ impl RecordProtocolBehavior for Plaintext {
     ) -> ContentType {
         plaintext_out.write_all(record.payload).unwrap();
         record.header.content_type
-    }
-}
-
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
     }
 }

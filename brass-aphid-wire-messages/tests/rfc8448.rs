@@ -184,7 +184,7 @@ fn test_encrypted_extensions_1rtt() {
     let (encrypted_extensions, _) = EncryptedExtensions::decode_from(remaining).unwrap();
 
     // Verify the extensions blob is present
-    assert!(!encrypted_extensions.extensions.blob().is_empty());
+    assert!(!encrypted_extensions.extensions.list().is_empty());
 }
 
 /// Test the Certificate message from the Simple 1-RTT Handshake in RFC8448
