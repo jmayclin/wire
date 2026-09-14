@@ -20,7 +20,7 @@ use crate::{
     },
 };
 use brass_aphid_wire_macros::{DecodeEnum, DecodeStruct, EncodeEnum, EncodeStruct};
-use std::io::{ErrorKind, Read};
+use std::io::ErrorKind;
 
 const TLS13_HELLO_RETRY_RANDOM: &[u8] = &[
     207, 33, 173, 116, 229, 154, 97, 17, 190, 29, 140, 2, 30, 101, 184, 145, 194, 162, 17, 22, 122,
@@ -75,7 +75,7 @@ impl ClientHello {
         let supported_version = self
             .extensions
             .as_ref()
-            .map(|extensions| {
+            .and_then(|extensions| {
                 extensions
                     .list()
                     .iter()
@@ -87,8 +87,7 @@ impl ClientHello {
                             None
                         }
                     })
-            })
-            .flatten();
+            });
 
         if let Some(versions) = supported_version {
             versions
@@ -106,7 +105,7 @@ impl ClientHello {
     pub fn supported_signatures(&self) -> Option<Vec<SigHashOrScheme>> {
         self.extensions
             .as_ref()
-            .map(|extensions| {
+            .and_then(|extensions| {
                 extensions
                     .list()
                     .iter()
@@ -119,7 +118,6 @@ impl ClientHello {
                         }
                     })
             })
-            .flatten()
     }
 
     /// Return the list of groups that the client sent key shares for

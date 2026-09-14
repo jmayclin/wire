@@ -56,7 +56,7 @@ fn key_update_request() -> anyhow::Result<()> {
         .clone();
     let application_data: Vec<String> = messages
         .into_iter()
-        .filter_map(|(sender, content)| {
+        .filter_map(|(_sender, content)| {
             if let ContentValue::ApplicationData(d) = content {
                 Some(String::from_utf8(d).unwrap())
             } else {

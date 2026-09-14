@@ -51,7 +51,7 @@ fn single_message_many_records() -> anyhow::Result<()> {
         builder.set_max_send_fragment(512);
         builder.set_ca_file(get_cert_path(PemType::CACert, SigType::Rsa2048))?;
         builder.set_verify(SslVerifyMode::FAIL_IF_NO_PEER_CERT | SslVerifyMode::PEER);
-        builder.set_keylog_callback(move |sslref, key_log| {
+        builder.set_keylog_callback(move |_sslref, key_log| {
             key_manager_handle.parse_key_log_line(key_log.as_bytes());
         });
         builder.build()
@@ -136,7 +136,7 @@ fn single_message_many_records() -> anyhow::Result<()> {
         ];
 
         let mut messages = transcript.drain(..);
-        for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
+        for (sender, content) in expected_transcript.into_iter() {
             let (actual_sender, actual_content) = messages.next().unwrap();
             assert_eq!(actual_sender, sender);
             assert!(content.same_as(actual_content));
@@ -144,7 +144,7 @@ fn single_message_many_records() -> anyhow::Result<()> {
         assert!(messages.next().is_none());
     }
 
-    let mut messages = transcript.drain(..);
+    let _messages = transcript.drain(..);
 
     Ok(())
 }

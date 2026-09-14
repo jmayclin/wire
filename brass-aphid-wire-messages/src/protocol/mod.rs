@@ -133,7 +133,7 @@ mod tests {
         sink.encode_value(&b)?;
         sink.encode_value(&c)?;
 
-        let (written, remaining) = sink.split();
+        let (written, _remaining) = sink.split();
 
         assert_eq!(written, bytes);
 

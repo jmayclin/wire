@@ -1,12 +1,11 @@
 use std::io::{BufRead, Cursor, Write};
 
-use aes_gcm::aead::{Aead, AeadInPlace};
-use aes_gcm::aes::cipher::{InOut, InOutBuf};
+use aes_gcm::aes::cipher::InOutBuf;
 use aes_gcm::{AeadInOut, Aes128Gcm, Aes256Gcm, KeyInit};
 use brass_aphid_wire_messages::codec::EncodeValue;
 use brass_aphid_wire_messages::{
     codec::{DecodeByteSource, DecodeValue},
-    iana::{self, Cipher, Protocol},
+    iana::{self, Protocol},
     prefixed_list::PrefixedBlob,
     protocol::{ContentType, RecordHeader},
 };
@@ -16,7 +15,7 @@ use hkdf::{GenericHkdf, HmacImpl};
 use hmac::{EagerHash, SimpleHmac};
 use sha2::{Sha256, Sha384};
 
-use crate::{Payload, Record, RecordError, RecordProtocol, RecordProtocolBehavior};
+use crate::{Record, RecordError, RecordProtocolBehavior};
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -130,9 +129,9 @@ impl Tls13Cipher {
 
     fn iv(&self) -> [u8; Self::IV_SIZE] {
         match self {
-            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv } => iv.clone(),
-            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv } => iv.clone(),
-            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv } => iv.clone(),
+            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key: _, iv } => *iv,
+            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key: _, iv } => *iv,
+            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key: _, iv } => *iv,
         }
     }
 
@@ -146,19 +145,19 @@ impl Tls13Cipher {
         let inout = InOutBuf::from(plaintext);
 
         match self {
-            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv } => {
+            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv: _ } => {
                 let tag = key
                     .encrypt_inout_detached(nonce.into(), aad, inout)
                     .unwrap();
                 tag_buffer.write_all(&tag).unwrap();
             }
-            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv } => {
+            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv: _ } => {
                 let tag = key
                     .encrypt_inout_detached(nonce.into(), aad, inout)
                     .unwrap();
                 tag_buffer.write_all(&tag).unwrap();
             }
-            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv } => {
+            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv: _ } => {
                 let tag = key
                     .encrypt_inout_detached(nonce.into(), aad, inout)
                     .unwrap();
@@ -186,28 +185,28 @@ impl Tls13Cipher {
         let length = ciphertext.len();
 
         match self {
-            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv } => {
+            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv: _ } => {
                 key.decrypt_inout_detached(
                     nonce.into(),
-                    aad.as_slice().into(),
+                    aad.as_slice(),
                     in_out,
                     tag.as_ref().try_into().unwrap(),
                 )
                 .unwrap();
             }
-            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv } => {
+            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv: _ } => {
                 key.decrypt_inout_detached(
                     nonce.into(),
-                    aad.as_slice().into(),
+                    aad.as_slice(),
                     in_out,
                     tag.as_ref().try_into().unwrap(),
                 )
                 .unwrap();
             }
-            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv } => {
+            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv: _ } => {
                 key.decrypt_inout_detached(
                     nonce.into(),
-                    aad.as_slice().into(),
+                    aad.as_slice(),
                     in_out,
                     tag.as_ref().try_into().unwrap(),
                 )
@@ -219,9 +218,8 @@ impl Tls13Cipher {
     }
 }
 
-
 /// TLS 1.3 Encrypted Records
-/// 
+///
 /// ### Record Structure
 /// ```text
 /// 5 byte record header    ciphertext ("payload")         final 16 bytes is aead tag
@@ -357,7 +355,7 @@ impl RecordProtocolBehavior for Tls13 {
         };
         let (payload, _padding) =
             decrypted_payload.split_at(decrypted_payload.len() - padding_bytes);
-        let (content_type, payload) = payload.split_last().unwrap();
+        let (content_type, _payload) = payload.split_last().unwrap();
         let content_type = ContentType::decode_from_exact([*content_type].as_slice()).unwrap();
 
         // padding + content type

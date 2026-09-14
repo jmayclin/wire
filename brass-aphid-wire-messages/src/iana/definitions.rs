@@ -110,8 +110,8 @@ pub struct Cipher {
 
 /// This contains all of the ciphers from the IANA CSV, as well as [`NON_STANDARD_CIPHERS`].
 static IANA_CIPHERS: LazyLock<Vec<([u8; 2], &'static str)>> = LazyLock::new(|| {
-    let mut ciphers = Cipher::parse_iana_csv();
-    ciphers
+    
+    Cipher::parse_iana_csv()
 });
 
 impl Cipher {
@@ -336,8 +336,8 @@ mod cipher_tests {
             value: [0xFF, 0xFE],
         };
         assert_eq!(cipher.description(), None);
-        assert_eq!(cipher.supports_tls13(), false);
-        assert_eq!(cipher.anonymous_kx(), false);
+        assert!(!cipher.supports_tls13());
+        assert!(!cipher.anonymous_kx());
     }
 }
 

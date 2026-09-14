@@ -19,7 +19,7 @@ use crate::{
 };
 use brass_aphid_wire_macros::{DecodeEnum, DecodeStruct, EncodeEnum, EncodeStruct};
 use std::fmt::Debug;
-use std::io::{ErrorKind, Read};
+use std::io::ErrorKind;
 use strum::IntoEnumIterator;
 
 /// This is the "basic" extension struct. Any extension will be able to be parsed

@@ -55,7 +55,7 @@ fn hello_retry_request() -> anyhow::Result<()> {
         .clone();
     let application_data: Vec<String> = messages
         .iter()
-        .filter_map(|(sender, content)| {
+        .filter_map(|(_sender, content)| {
             if let ContentValue::ApplicationData(d) = content {
                 Some(String::from_utf8(d.clone()).unwrap())
             } else {
@@ -102,7 +102,7 @@ fn hello_retry_request() -> anyhow::Result<()> {
         ContentValue::Handshake(HandshakeMessageValue::ClientHello(_))
     ));
 
-    let (sender, content) = messages.next().unwrap();
+    let (_sender, content) = messages.next().unwrap();
     assert!(matches!(
         content,
         ContentValue::Handshake(HandshakeMessageValue::ServerHelloConfusion(

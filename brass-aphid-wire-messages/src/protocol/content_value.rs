@@ -215,7 +215,7 @@ impl EncodeValue for HandshakeMessageValue {
             HandshakeMessageValue::EncryptedExtensions(content) => content.encode_to_vec(),
             HandshakeMessageValue::CertificateTls13(content) => content.encode_to_vec(),
             HandshakeMessageValue::CertificateTls12ish(content) => content.encode_to_vec(),
-            HandshakeMessageValue::ServerKeyExchange(content) => unimplemented!(),
+            HandshakeMessageValue::ServerKeyExchange(_content) => unimplemented!(),
             HandshakeMessageValue::CertVerifyTls13(content) => content.encode_to_vec(),
             HandshakeMessageValue::CertificateRequestTls13(content) => content.encode_to_vec(),
             HandshakeMessageValue::NewSessionTicketTls13(content) => content.encode_to_vec(),

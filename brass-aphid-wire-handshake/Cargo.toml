@@ -5,8 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
-brass-aphid-wire-macros = { version = "0.0.4", path = "../brass-aphid-wire-macros" }
-brass-aphid-wire-messages = { version = "0.0.5", path = "../brass-aphid-wire-messages" }
+brass-aphid-wire-macros = { version = "0.0.5", path = "../brass-aphid-wire-macros" }
+brass-aphid-wire-messages = { version = "0.0.6", path = "../brass-aphid-wire-messages" }
 ecdsa = "0.17.0"
 elliptic-curve = "0.14.1"
 hex = "0.4.3"

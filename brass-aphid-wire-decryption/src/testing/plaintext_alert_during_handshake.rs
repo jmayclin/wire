@@ -1,5 +1,4 @@
 use std::{
-    io::{Read, Write},
     net::TcpStream,
     task::Poll,
 };
@@ -16,7 +15,7 @@ use brass_aphid_wire_messages::protocol::{
     content_value::ContentValue, Alert, AlertDescription, AlertLevel, ContentType, HandshakeType,
 };
 use openssl::ssl::{
-    ShutdownResult, Ssl, SslContext, SslFiletype, SslMethod, SslStream, SslVerifyMode,
+    Ssl, SslContext, SslMethod, SslStream, SslVerifyMode,
 };
 
 #[test]
@@ -26,7 +25,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
     //     .init();
 
     let key_manager = KeyManager::new();
-    let key_manager_handle = key_manager.clone();
+    let _key_manager_handle = key_manager.clone();
 
     let client_config = {
         let mut builder = SslContext::builder(SslMethod::tls_client())?;
@@ -74,8 +73,8 @@ fn openssl_server_test() -> anyhow::Result<()> {
 
             // setup decryption
             let stream_decrypter = {
-                let decrypting_stream = DecryptingPipe::s2n_tls_decrypter(key_manager, &mut server);
-                decrypting_stream
+                
+                DecryptingPipe::s2n_tls_decrypter(key_manager, &mut server)
             };
 
             loop {
@@ -171,7 +170,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
     // sometimes afterwards.
 
     let alert = messages
-        .inspect(|(sender, message)| {
+        .inspect(|(_sender, message)| {
             if let ContentValue::Alert(alert) = message {
                 println!("alert was {alert:?}");
             }

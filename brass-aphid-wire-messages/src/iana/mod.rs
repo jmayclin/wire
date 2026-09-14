@@ -7,9 +7,7 @@ use crate::{
     discriminant::impl_byte_value,
 };
 use brass_aphid_wire_macros::{DecodeEnum, EncodeEnum};
-use byteorder::{BigEndian, ReadBytesExt};
 pub use definitions::*;
-use std::io::Read;
 
 impl DecodeValue for SignatureScheme {
     fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {

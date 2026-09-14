@@ -430,7 +430,7 @@ fn generate_tls13_record_fixtures() {
 fn tls13_decryption() -> std::io::Result<()> {
     for cipher in TLS13_CIPHERS {
         let mut conversation = record_conversation(cipher);
-        let cipher = iana::Cipher::from_description(*cipher).unwrap();
+        let cipher = iana::Cipher::from_description(cipher).unwrap();
 
         let mut client_tx = RecordProtocol {
             state: Plaintext::new(),
@@ -446,7 +446,7 @@ fn tls13_decryption() -> std::io::Result<()> {
         {
             let mut client_hello = conversation.next_client_tx();
             let (mut payload, remaining) =
-                client_tx.decapsulate_bytes(&mut client_hello, &mut cursor)?;
+                client_tx.decapsulate_bytes(&client_hello, &mut cursor)?;
             assert!(remaining.is_empty());
 
             let payload = payload.assert_handshake();
@@ -460,14 +460,14 @@ fn tls13_decryption() -> std::io::Result<()> {
             // plaintext record: client hello
             let mut server_hello = conversation.next_server_tx();
             let (mut payload, remaining) =
-                server_tx.decapsulate_bytes(&mut server_hello, &mut cursor)?;
+                server_tx.decapsulate_bytes(&server_hello, &mut cursor)?;
             let payload = payload.assert_handshake();
             let hs = HandshakeMessageValue::decode_from_exact(payload)?;
             assert_eq!(hs.handshake_type(), HandshakeType::ServerHello);
 
             // plaintext record: CCS
             let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
-            let result = payload.assert_ccs();
+            let _result = payload.assert_ccs();
 
             let secret = conversation
                 .nss_key_log
@@ -502,7 +502,7 @@ fn tls13_decryption() -> std::io::Result<()> {
             assert_eq!(hs, HandshakeType::CertificateVerify);
 
             // Encrypted Record: Finished
-            let (mut payload, remaining) =
+            let (mut payload, _remaining) =
                 server_tx.decapsulate_bytes(remaining, &mut cursor).unwrap();
             let payload = payload.assert_handshake();
             let hs = HandshakeMessageValue::decode_from_with_context_exact(
@@ -571,7 +571,7 @@ where
 fn tls13_encryption() -> std::io::Result<()> {
     for cipher in TLS13_CIPHERS {
         let mut conversation = record_conversation(cipher);
-        let cipher = iana::Cipher::from_description(*cipher).unwrap();
+        let cipher = iana::Cipher::from_description(cipher).unwrap();
 
         // We reproduce the *server's* first flight. Two protocol instances per
         // direction: one to decrypt the recorded bytes back into plaintext, and

@@ -20,7 +20,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
         let mut builder = SslContext::builder(SslMethod::tls_client())?;
         builder.set_ca_file(get_cert_path(PemType::CACert, SigType::Rsa2048))?;
         builder.set_verify(SslVerifyMode::FAIL_IF_NO_PEER_CERT | SslVerifyMode::PEER);
-        builder.set_keylog_callback(move |sslref, key_log| {
+        builder.set_keylog_callback(move |_sslref, key_log| {
             key_manager_handle.parse_key_log_line(key_log.as_bytes());
         });
         builder.build()
@@ -108,7 +108,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
         ];
 
         let mut messages = transcript.drain(..);
-        for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
+        for (sender, content) in expected_transcript.into_iter() {
             let (actual_sender, actual_content) = messages.next().unwrap();
             assert_eq!(actual_sender, sender);
             assert!(content.same_as(actual_content));

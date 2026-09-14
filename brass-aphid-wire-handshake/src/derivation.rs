@@ -1,23 +1,17 @@
-use std::marker::PhantomData;
 
-use ::ecdsa::{EcdsaCurve, SignatureEncoding, SigningKey};
+use ::ecdsa::SignatureEncoding;
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
-    iana,
-    prefixed_list::{PrefixedBlob, PrefixedList},
+    prefixed_list::PrefixedBlob,
     protocol::{
-        content_value::HandshakeMessageValue, CertVerifyTls13, CertificateEntry, CertificateTls13,
-        Finished, HandshakeType,
+        content_value::HandshakeMessageValue, HandshakeType,
     },
 };
-use ecdsa::signature::Signer;
-use elliptic_curve::CurveArithmetic;
 use hkdf::{GenericHkdf, Hkdf, HmacImpl};
 use hmac::SimpleHmac;
-use p256::pkcs8::DecodePrivateKey;
 use sha2::{Digest, Sha256, Sha384};
 
-use crate::{derivation::KeyScheduleState::EarlySecret, transcript};
+use crate::transcript;
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -108,34 +102,41 @@ impl KeySchedule {
     fn hkdf_extract(&self, ikm: &[u8], salt: &[u8]) -> Vec<u8> {
         match self.hash_len {
             KeyScheduleHash::Sha256 => {
-                // needs to be sha256 
-                let (prk, hk) = Hkdf::<Sha256>::extract(Some(salt), ikm);
+                // needs to be sha256
+                let (prk, _hk) = Hkdf::<Sha256>::extract(Some(salt), ikm);
                 prk.to_vec()
-            },
+            }
             KeyScheduleHash::Sha384 => {
-                let (prk, hk) = Hkdf::<Sha384>::extract(Some(salt), ikm);
+                let (prk, _hk) = Hkdf::<Sha384>::extract(Some(salt), ikm);
                 prk.to_vec()
             }
         }
     }
 
-
-
     ///   Derive-Secret(Secret, Label, Messages) =
     ///        HKDF-Expand-Label(Secret, Label,
     ///                          Transcript-Hash(Messages), Hash.length)
-    fn derive_secret(&self, secret: &[u8], label: &[u8], message: &[u8]) -> Vec<u8> {
+    fn derive_secret(&self, secret: &[u8], label: &[u8], _message: &[u8]) -> Vec<u8> {
         let transcript_hash = match self.hash_len {
             KeyScheduleHash::Sha256 => transcript::transcript_hash::<Sha256>(&[]),
             KeyScheduleHash::Sha384 => transcript::transcript_hash::<Sha384>(&[]),
         };
 
         match self.hash_len {
-            KeyScheduleHash::Sha256 => hkdf_expand_label::<Sha256>(secret, label, &transcript_hash, self.hash_len.hash_len() as u16),
-            KeyScheduleHash::Sha384 => hkdf_expand_label::<Sha384>(secret, label, &transcript_hash, self.hash_len.hash_len() as u16),
+            KeyScheduleHash::Sha256 => hkdf_expand_label::<Sha256>(
+                secret,
+                label,
+                &transcript_hash,
+                self.hash_len.hash_len() as u16,
+            ),
+            KeyScheduleHash::Sha384 => hkdf_expand_label::<Sha384>(
+                secret,
+                label,
+                &transcript_hash,
+                self.hash_len.hash_len() as u16,
+            ),
         }
     }
-    
 
     ////////////////////////////////////////////////////////////////////////////
     ///////////////////            Initial State          //////////////////////
@@ -152,7 +153,7 @@ impl KeySchedule {
             }
             None => zero.clone(),
         };
-        self.secret = Self::hkdf_extract(&self, &psk, &zero);
+        self.secret = Self::hkdf_extract(self, &psk, &zero);
         // hkdf extract
         self.state = KeyScheduleState::EarlySecret;
     }
@@ -167,10 +168,10 @@ impl KeySchedule {
         Vec::new()
     }
 
-    fn to_handshake_secret(&mut self, shared_secret: &[u8]) {
+    fn to_handshake_secret(&mut self, _shared_secret: &[u8]) {
         debug_assert_eq!(self.state, KeyScheduleState::EarlySecret);
 
-        // 
+        //
 
         self.state = KeyScheduleState::HandshakeSecret
     }
@@ -215,12 +216,12 @@ impl KeySchedule {
     ///////////////////            Master Secret          //////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    fn client_application_traffic_secret_0(&self, transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    fn client_application_traffic_secret_0(&self, _transcript: &[HandshakeMessageValue]) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         Vec::new()
     }
 
-    fn server_application_traffic_secret_0(&self, transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    fn server_application_traffic_secret_0(&self, _transcript: &[HandshakeMessageValue]) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         Vec::new()
     }

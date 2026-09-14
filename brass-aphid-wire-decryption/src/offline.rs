@@ -61,7 +61,7 @@ mod tests {
     };
 
     use super::*;
-    use crate::decryption::{stream_decrypter::StreamDecrypter, transcript};
+    use crate::decryption::stream_decrypter::StreamDecrypter;
     use std::{path::PathBuf, str::FromStr};
 
     const GO_RESOURCES: &str = "../go-tls-transcript/resources";
@@ -158,8 +158,8 @@ mod tests {
             let client_hello = std::fs::read(client_hello).unwrap();
             let buffer = client_hello.as_slice();
 
-            let (record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
-            let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
+            let (_record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
+            let (_message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
             let client_hello = ClientHello::decode_from_exact(buffer).unwrap();
 
             let transcript = format!("{:#?}", client_hello);
@@ -196,8 +196,8 @@ mod tests {
             let client_hello = std::fs::read(client_hello).unwrap();
             let buffer = client_hello.as_slice();
 
-            let (record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
-            let (message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
+            let (_record_header, buffer) = RecordHeader::decode_from(buffer).unwrap();
+            let (_message_header, buffer) = HandshakeMessageHeader::decode_from(buffer).unwrap();
             let client_hello = ClientHello::decode_from_exact(buffer).unwrap();
 
             let transcript = format!("{:#?}", client_hello);

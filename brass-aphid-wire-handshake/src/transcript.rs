@@ -1,19 +1,14 @@
-use ::ecdsa::{EcdsaCurve, SignatureEncoding, SigningKey};
+use ::ecdsa::SignatureEncoding;
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
-    iana,
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
-        content_value::HandshakeMessageValue, CertVerifyTls13, CertificateEntry, CertificateTls13,
-        Finished,
+        content_value::HandshakeMessageValue, CertificateEntry, CertificateTls13,
     },
 };
-use ecdsa::signature::Signer;
-use elliptic_curve::CurveArithmetic;
-use p256::pkcs8::DecodePrivateKey;
-use sha2::{Digest, Sha256, Sha384};
 use hkdf::{GenericHkdf, HmacImpl};
-use hmac::{SimpleHmac};
+use hmac::SimpleHmac;
+use sha2::Digest;
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -95,8 +90,7 @@ struct HandshakeTranscript {
 pub fn transcript_hash<T: Digest>(messages: &[HandshakeMessageValue]) -> Vec<u8> {
     let concatenated_messages: Vec<u8> = messages
         .iter()
-        .map(|message| message.encode_to_vec().unwrap())
-        .flatten()
+        .flat_map(|message| message.encode_to_vec().unwrap())
         .collect();
 
     T::digest(concatenated_messages).to_vec()

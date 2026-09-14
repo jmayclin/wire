@@ -15,12 +15,11 @@
 //! Ideally all of the codec stuff would be moved to a different crate, and we'd
 //! have proc macros to derive the `EncodeValue` and `DecodeValue` traits.
 
-use std::io::{self, Cursor, ErrorKind, Read, Write};
+use std::io::{self, Cursor, ErrorKind, Write};
 
-use anyhow::Error;
 
 pub trait CursorSplit<'a> {
-    fn split(self: Self) -> (&'a mut [u8], &'a mut [u8]);
+    fn split(self) -> (&'a mut [u8], &'a mut [u8]);
 }
 
 impl<'a> CursorSplit<'a> for std::io::Cursor<&'a mut [u8]> {
@@ -296,7 +295,7 @@ impl EncodeValue for u64 {
 impl<const L: usize> DecodeValue for [u8; L] {
     fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (value, remaining) = buffer.pull(L)?;
-        let value = value.freeze().try_into().map_err(|e| {
+        let value = value.freeze().try_into().map_err(|_e| {
             std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
         })?;
 
@@ -340,10 +339,10 @@ impl<T: EncodeValue> EncodeValue for Vec<T> {
 pub struct U24(pub u32);
 
 impl DecodeValue for U24 {
-    fn decode_from<S: DecodeByteSource>(mut buffer: S) -> std::io::Result<(Self, S)> {
+    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
         let (value, remaining) = buffer.pull(3)?;
         let value = value.freeze();
-        let value: [u8; 3] = value.try_into().map_err(|e| {
+        let value: [u8; 3] = value.try_into().map_err(|_e| {
             std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
         })?;
 

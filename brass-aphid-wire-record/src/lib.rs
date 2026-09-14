@@ -78,30 +78,30 @@ pub enum Payload<'a> {
 impl Payload<'_> {
     pub fn assert_application(&mut self) -> &[u8] {
         if let Payload::Application(data) = self {
-            return *data;
+            return data;
         }
         panic!("expected Application, but was {self:?}");
     }
 
     pub fn assert_handshake(&mut self) -> &[u8] {
         if let Payload::Handshake(data) = self {
-            return *data;
+            return data;
         }
         panic!("expected Handshake, but was {self:?}");
     }
 
     pub fn assert_ccs(&mut self) -> &[u8] {
         if let Payload::CCS(data) = self {
-            return *data;
+            return data;
         }
         panic!("expected Change Cipher Spec, but was {self:?}");
     }
 }
 
 /// The top level record protocol is responsible for record framing and dispatch
-/// 
+///
 /// It is _not_ aware of when the underlying state should be switched. That must
-/// be managed by a higher level construct. Generally you need a higher level 
+/// be managed by a higher level construct. Generally you need a higher level
 /// Connection struct which intercepts non-application data and handle it appropriately
 pub struct RecordProtocol<T> {
     pub state: T,
@@ -176,16 +176,22 @@ pub trait RecordProtocolBehavior {
 /// Plaintext records are always used for the Client Hello and Server Hello in
 /// all protocol versions. Additionally, legacy TLS (TLS 1.0 -> TLS 1.2) use plaintex
 /// records for all of the handshake phase.
-/// 
+///
 /// ### Record Structure
 /// ```text
 /// 5 byte record header    plaintext payload
-///     v                       v 
+///     v                       v
 /// |hhhhh|------------------------------------|
 /// ```
 pub struct Plaintext {
     /// should not be TLS 1.3
     pub record_header_version: Protocol,
+}
+
+impl Default for Plaintext {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Plaintext {
@@ -215,7 +221,7 @@ impl RecordProtocolBehavior for Plaintext {
             record_length: payload.len() as u16,
         };
         output.encode_value(&header).unwrap();
-        output.write_all(&payload).unwrap();
+        output.write_all(payload).unwrap();
 
         Ok(())
     }

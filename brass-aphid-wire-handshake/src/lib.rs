@@ -1,25 +1,24 @@
+mod derivation;
 mod protocol;
 mod transcript;
-mod derivation;
 
-use std::{io::Cursor, path::Prefix, task::Poll};
+use std::task::Poll;
 
 use brass_aphid_wire_messages::{
     codec::{DecodeByteSource, DecodeValue},
-    iana::{self, Protocol},
+    iana::{self},
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
         content_value::HandshakeMessageValue,
         extensions::{
             self, ClientHelloExtension, ClientHelloExtensionData,
             ExtensionType::{self},
-            KeyShareServerHello, SupportedGroups, SupportedVersionServerHello,
+            KeyShareServerHello, SupportedVersionServerHello,
         },
         HandshakeType, ServerHelloConfusionMode, SigHashOrScheme,
     },
 };
-use elliptic_curve::{consts::P256, sec1::ToSec1Point, Generate};
-use p256::SecretKey;
+use elliptic_curve::{sec1::ToSec1Point, Generate};
 
 // https://www.rfc-editor.org/info/rfc8446/#appendix-A
 
@@ -89,7 +88,7 @@ impl Client {
     }
 
     fn read_bytes(bytes: &[u8]) -> std::io::Result<(HandshakeMessageValue, &[u8])> {
-        let (handshake, remaining) = bytes.decode_value::<HandshakeMessageValue>()?;
+        let (_handshake, _remaining) = bytes.decode_value::<HandshakeMessageValue>()?;
 
         todo!()
     }
@@ -125,27 +124,32 @@ impl Client {
                     .unwrap();
 
                 // the UncompressedPointRepresentation is a specific SEC1 encoding
-                let public_key = p256::PublicKey::from_sec1_bytes(key_share.key_exchange.blob()).unwrap();
+                let public_key =
+                    p256::PublicKey::from_sec1_bytes(key_share.key_exchange.blob()).unwrap();
 
                 self.negotiated_cipher = Some(negotiated_cipher);
                 self.negotiated_version = Some(negotiated_version.unwrap());
                 self.negotiated_group = Some(key_share.group);
                 self.server_key_share = Some(public_key);
 
-                let output = self.client_key_share.as_ref().unwrap().diffie_hellman(&public_key);
+                let _output = self
+                    .client_key_share
+                    .as_ref()
+                    .unwrap()
+                    .diffie_hellman(&public_key);
             }
             HandshakeMessageValue::ServerHelloConfusion(
-                ServerHelloConfusionMode::HelloRetryRequest(sh),
+                ServerHelloConfusionMode::HelloRetryRequest(_sh),
             ) => {}
             HandshakeMessageValue::EncryptedExtensions(ee) => {
                 println!("ee: {ee:?}");
             }
-            HandshakeMessageValue::CertificateTls13(certificate_tls13) => todo!(),
+            HandshakeMessageValue::CertificateTls13(_certificate_tls13) => todo!(),
             HandshakeMessageValue::CertVerifyTls13(cert_verify_tls13) => {
-                let negotiated_signature = cert_verify_tls13.algorithm;
+                let _negotiated_signature = cert_verify_tls13.algorithm;
             }
-            HandshakeMessageValue::NewSessionTicketTls13(new_session_ticket_tls13) => todo!(),
-            HandshakeMessageValue::Finished(finished) => todo!(),
+            HandshakeMessageValue::NewSessionTicketTls13(_new_session_ticket_tls13) => todo!(),
+            HandshakeMessageValue::Finished(_finished) => todo!(),
             other => panic!("did not expect {other:?}"),
         }
 
@@ -303,7 +307,7 @@ struct Server;
 struct HandshakeState {}
 
 impl HandshakeState {
-    fn process_message(message: &HandshakeMessageValue) {}
+    fn process_message(_message: &HandshakeMessageValue) {}
 }
 
 #[cfg(test)]

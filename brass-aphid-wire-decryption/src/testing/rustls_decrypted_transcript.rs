@@ -63,16 +63,16 @@ fn rustls_client_test() -> anyhow::Result<()> {
 
         const MESSAGE: &[u8] = b"Hello from the server";
 
-        let mut transcript = std::thread::scope(|s| {
+        let transcript = std::thread::scope(|s| {
             s.spawn(|| {
-                let (mut server_stream, client_addr) = server_tcp.accept().unwrap();
+                let (mut server_stream, _client_addr) = server_tcp.accept().unwrap();
                 // let mut stream = SslStream::new(server, server_stream).unwrap();
                 let mut tls_stream = rustls::Stream::new(&mut server, &mut server_stream);
                 tls_stream.write_all(MESSAGE).unwrap();
                 tls_stream.flush().unwrap();
                 tls_stream.conn.send_close_notify();
                 tls_stream.write(&[]);
-                let closed = tls_stream.read(&mut []);
+                let _closed = tls_stream.read(&mut []);
             });
             let transcript = s
                 .spawn(move || {
@@ -88,7 +88,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
                     let mut tls = rustls::Stream::new(&mut conn, &mut decrypting_pipe);
                     let mut buffer = [0; MESSAGE.len()];
                     tls.read_exact(&mut buffer);
-                    let shutdown = tls.read(&mut []);
+                    let _shutdown = tls.read(&mut []);
                     tls.conn.send_close_notify();
                     tls.write(&[]);
 
@@ -132,7 +132,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
         ];
 
         let mut messages = server_auth_transcript.drain(..);
-        for (i, (sender, content)) in expected_transcript.into_iter().enumerate() {
+        for (sender, content) in expected_transcript.into_iter() {
             let (actual_sender, actual_content) = messages.next().unwrap();
             assert_eq!(actual_sender, sender);
             assert!(content.same_as(actual_content));
@@ -141,7 +141,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
     }
     // assert!(false);
 
-    let mut resumption_transcript = {
+    let _resumption_transcript = {
         let mut server = rustls::ServerConnection::new(server_config)?;
         let client_config = client_config.clone();
         let key_manager = key_manager.clone();
@@ -151,16 +151,16 @@ fn rustls_client_test() -> anyhow::Result<()> {
 
         const MESSAGE: &[u8] = b"Hello from the server";
 
-        let mut transcript = std::thread::scope(|s| {
+        let transcript = std::thread::scope(|s| {
             s.spawn(|| {
-                let (mut server_stream, client_addr) = server_tcp.accept().unwrap();
+                let (mut server_stream, _client_addr) = server_tcp.accept().unwrap();
                 // let mut stream = SslStream::new(server, server_stream).unwrap();
                 let mut tls_stream = rustls::Stream::new(&mut server, &mut server_stream);
                 tls_stream.write_all(MESSAGE).unwrap();
                 tls_stream.flush().unwrap();
                 tls_stream.conn.send_close_notify();
                 tls_stream.write(&[]);
-                let closed = tls_stream.read(&mut []);
+                let _closed = tls_stream.read(&mut []);
             });
             let transcript = s
                 .spawn(move || {
@@ -177,7 +177,7 @@ fn rustls_client_test() -> anyhow::Result<()> {
                     let mut buffer = [0; MESSAGE.len()];
                     tls.read_exact(&mut buffer);
                     assert_eq!(tls.conn.handshake_kind(), Some(HandshakeKind::Resumed));
-                    let shutdown = tls.read(&mut []);
+                    let _shutdown = tls.read(&mut []);
                     tls.conn.send_close_notify();
                     let _ = tls.write(&[]);
 

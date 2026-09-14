@@ -104,7 +104,7 @@ fn tls12_transcript() -> Result<Vec<(Mode, Vec<u8>)>, Error> {
 #[test]
 fn weird_group() {
     let weird: u16 = 2057;
-    let s = SigHashOrScheme::decode_from_exact(weird.to_be_bytes().as_slice()).unwrap();
+    let _s = SigHashOrScheme::decode_from_exact(weird.to_be_bytes().as_slice()).unwrap();
 }
 
 /// Test a complete TLS 1.3 handshake with application data exchange
@@ -395,7 +395,7 @@ fn tls12() -> std::io::Result<()> {
 
         let (key_exchange, buffer) =
             ServerKeyExchange::decode_from_with_context(buffer, selected_cipher).unwrap();
-        if let ServerKeyExchange::Ecdhe { params, signature } = key_exchange {
+        if let ServerKeyExchange::Ecdhe { params, signature: _ } = key_exchange {
             assert_eq!(params.curve_params.curve_type, ECCurveType::NamedCurve);
             if let EcCurveValue::NamedCurve(group) = params.curve_params.curve_value {
                 assert_eq!(group.description(), Some("secp256r1"));
@@ -437,7 +437,7 @@ fn tls12() -> std::io::Result<()> {
         let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::Handshake);
 
-        let (handshake_header, buffer) = HandshakeMessageHeader::decode_from(buffer)?;
+        let (handshake_header, _buffer) = HandshakeMessageHeader::decode_from(buffer)?;
         assert_eq!(
             handshake_header.handshake_type,
             HandshakeType::ClientKeyExchange
@@ -467,7 +467,7 @@ fn tls12() -> std::io::Result<()> {
         assert_eq!(sender, Mode::Client);
         let buffer = record.as_slice();
 
-        let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
+        let (record_header, _buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::Handshake);
 
         // encrypted
@@ -494,7 +494,7 @@ fn tls12() -> std::io::Result<()> {
         assert_eq!(sender, Mode::Server);
         let buffer = record.as_slice();
 
-        let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
+        let (record_header, _buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::Handshake);
 
         // encrypted
@@ -507,7 +507,7 @@ fn tls12() -> std::io::Result<()> {
         assert_eq!(sender, Mode::Client);
         let buffer = record.as_slice();
 
-        let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
+        let (record_header, _buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::ApplicationData);
     }
 
@@ -518,7 +518,7 @@ fn tls12() -> std::io::Result<()> {
         assert_eq!(sender, Mode::Client);
         let buffer = record.as_slice();
 
-        let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
+        let (record_header, _buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::Alert);
     }
 
@@ -529,7 +529,7 @@ fn tls12() -> std::io::Result<()> {
         assert_eq!(sender, Mode::Server);
         let buffer = record.as_slice();
 
-        let (record_header, buffer) = RecordHeader::decode_from(buffer)?;
+        let (record_header, _buffer) = RecordHeader::decode_from(buffer)?;
         assert_eq!(record_header.content_type, ContentType::Alert);
     }
 
