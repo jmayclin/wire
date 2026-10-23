@@ -109,10 +109,8 @@ pub struct Cipher {
 }
 
 /// This contains all of the ciphers from the IANA CSV, as well as [`NON_STANDARD_CIPHERS`].
-static IANA_CIPHERS: LazyLock<Vec<([u8; 2], &'static str)>> = LazyLock::new(|| {
-    
-    Cipher::parse_iana_csv()
-});
+static IANA_CIPHERS: LazyLock<Vec<([u8; 2], &'static str)>> =
+    LazyLock::new(|| Cipher::parse_iana_csv());
 
 impl Cipher {
     /// From the CSV provided at https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-4

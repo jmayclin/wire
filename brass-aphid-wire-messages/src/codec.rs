@@ -17,7 +17,6 @@
 
 use std::io::{self, Cursor, ErrorKind, Write};
 
-
 pub trait CursorSplit<'a> {
     fn split(self) -> (&'a mut [u8], &'a mut [u8]);
 }

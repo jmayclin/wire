@@ -1,7 +1,4 @@
-use std::{
-    net::TcpStream,
-    task::Poll,
-};
+use std::{net::TcpStream, task::Poll};
 
 use crate::{
     decryption::{
@@ -14,9 +11,7 @@ use crate::{
 use brass_aphid_wire_messages::protocol::{
     content_value::ContentValue, Alert, AlertDescription, AlertLevel, ContentType, HandshakeType,
 };
-use openssl::ssl::{
-    Ssl, SslContext, SslMethod, SslStream, SslVerifyMode,
-};
+use openssl::ssl::{Ssl, SslContext, SslMethod, SslStream, SslVerifyMode};
 
 #[test]
 fn openssl_server_test() -> anyhow::Result<()> {
@@ -72,10 +67,7 @@ fn openssl_server_test() -> anyhow::Result<()> {
             }
 
             // setup decryption
-            let stream_decrypter = {
-                
-                DecryptingPipe::s2n_tls_decrypter(key_manager, &mut server)
-            };
+            let stream_decrypter = { DecryptingPipe::s2n_tls_decrypter(key_manager, &mut server) };
 
             loop {
                 if let Poll::Ready(Err(e)) = server.poll_negotiate() {

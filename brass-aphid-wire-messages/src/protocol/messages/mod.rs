@@ -13,7 +13,7 @@ use crate::{
     prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
         extensions::{
-            ClientHelloExtension, ClientHelloExtensionData, Extension, ExtensionType,
+            ClientHelloExtension, ClientHelloExtensionData, Extension, ExtensionType, KeyShare,
             KeyShareServerHello, SupportedVersionServerHello,
         },
         AlertDescription, AlertLevel, ContentType, HandshakeType,
@@ -72,22 +72,19 @@ impl ClientHello {
     /// Returns the list of values in the supported versions extension, or the
     /// single value in the client hello `protocol_version` field
     pub fn supported_versions(&self) -> Vec<iana::Protocol> {
-        let supported_version = self
-            .extensions
-            .as_ref()
-            .and_then(|extensions| {
-                extensions
-                    .list()
-                    .iter()
-                    .map(|ext| &ext.extension_data)
-                    .find_map(|ext| {
-                        if let ClientHelloExtensionData::SupportedVersions(versions) = ext {
-                            Some(versions.versions.list().to_vec())
-                        } else {
-                            None
-                        }
-                    })
-            });
+        let supported_version = self.extensions.as_ref().and_then(|extensions| {
+            extensions
+                .list()
+                .iter()
+                .map(|ext| &ext.extension_data)
+                .find_map(|ext| {
+                    if let ClientHelloExtensionData::SupportedVersions(versions) = ext {
+                        Some(versions.versions.list().to_vec())
+                    } else {
+                        None
+                    }
+                })
+        });
 
         if let Some(versions) = supported_version {
             versions
@@ -103,21 +100,19 @@ impl ClientHello {
 
     /// Return the values from the signature_scheme extension.
     pub fn supported_signatures(&self) -> Option<Vec<SigHashOrScheme>> {
-        self.extensions
-            .as_ref()
-            .and_then(|extensions| {
-                extensions
-                    .list()
-                    .iter()
-                    .map(|ext| &ext.extension_data)
-                    .find_map(|ext| {
-                        if let ClientHelloExtensionData::SignatureScheme(signatures) = ext {
-                            Some(signatures.supported_signature_algorithms.list().to_vec())
-                        } else {
-                            None
-                        }
-                    })
-            })
+        self.extensions.as_ref().and_then(|extensions| {
+            extensions
+                .list()
+                .iter()
+                .map(|ext| &ext.extension_data)
+                .find_map(|ext| {
+                    if let ClientHelloExtensionData::SignatureScheme(signatures) = ext {
+                        Some(signatures.supported_signature_algorithms.list().to_vec())
+                    } else {
+                        None
+                    }
+                })
+        })
     }
 
     /// Return the list of groups that the client sent key shares for
@@ -299,6 +294,16 @@ impl ServerHello {
 
     pub fn is_hello_retry_tls13(&self) -> bool {
         self.random == TLS13_HELLO_RETRY_RANDOM
+    }
+
+    /// Return the key share supplied by the server in it's key-share extension
+    pub fn key_share(&self) -> Option<KeyShare> {
+        self.extensions
+            .list()
+            .iter()
+            .find(|e| e.extension_type == ExtensionType::KeyShare)
+            .map(|ext| KeyShareServerHello::decode_from_exact(ext.extension_data.blob()).unwrap())
+            .map(|key_share| key_share.server_share)
     }
 }
 

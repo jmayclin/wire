@@ -1,4 +1,3 @@
-
 use brass_aphid_wire_messages::protocol::{
     content_value::ContentValue, ContentType, HandshakeType,
 };

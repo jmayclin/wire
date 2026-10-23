@@ -395,7 +395,11 @@ fn tls12() -> std::io::Result<()> {
 
         let (key_exchange, buffer) =
             ServerKeyExchange::decode_from_with_context(buffer, selected_cipher).unwrap();
-        if let ServerKeyExchange::Ecdhe { params, signature: _ } = key_exchange {
+        if let ServerKeyExchange::Ecdhe {
+            params,
+            signature: _,
+        } = key_exchange
+        {
             assert_eq!(params.curve_params.curve_type, ECCurveType::NamedCurve);
             if let EcCurveValue::NamedCurve(group) = params.curve_params.curve_value {
                 assert_eq!(group.description(), Some("secp256r1"));

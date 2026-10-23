@@ -2,9 +2,7 @@ use ::ecdsa::SignatureEncoding;
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
     prefixed_list::{PrefixedBlob, PrefixedList},
-    protocol::{
-        content_value::HandshakeMessageValue, CertificateEntry, CertificateTls13,
-    },
+    protocol::{content_value::HandshakeMessageValue, CertificateEntry, CertificateTls13},
 };
 use hkdf::{GenericHkdf, HmacImpl};
 use hmac::SimpleHmac;
@@ -238,6 +236,7 @@ pub fn certificate(certificate_chain_pem: &[u8]) -> CertificateTls13 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use elliptic_curve::pkcs8::DecodePrivateKey;
     #[test]
     fn key_parsing() {
         const SECP_256_R1: &str = include_str!("../../certs/ecdsa256/server-key.pem");

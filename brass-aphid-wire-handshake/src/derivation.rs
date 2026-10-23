@@ -1,11 +1,8 @@
-
 use ::ecdsa::SignatureEncoding;
 use brass_aphid_wire_messages::{
     codec::EncodeValue,
     prefixed_list::PrefixedBlob,
-    protocol::{
-        content_value::HandshakeMessageValue, HandshakeType,
-    },
+    protocol::{content_value::HandshakeMessageValue, HandshakeType},
 };
 use hkdf::{GenericHkdf, Hkdf, HmacImpl};
 use hmac::SimpleHmac;
@@ -84,11 +81,14 @@ enum KeyScheduleState {
 }
 
 struct KeySchedule {
-    hash_len: KeyScheduleHash,
+    hash: KeyScheduleHash,
     secret: Vec<u8>,
     /// modelling this as type state would be more absolute, but would make it a
     /// nightmare to actually store this anywhere because the upstream thing would
-    /// inherit the generic
+    /// inherit the generic.
+    ///
+    /// I'm actually reconsidering this, because we _also_ want the hash to just
+    /// be part of the type state?
     state: KeyScheduleState,
 }
 
@@ -100,7 +100,7 @@ impl KeySchedule {
     ///
     /// https://docs.rs/hkdf/latest/hkdf/#usage
     fn hkdf_extract(&self, ikm: &[u8], salt: &[u8]) -> Vec<u8> {
-        match self.hash_len {
+        match self.hash {
             KeyScheduleHash::Sha256 => {
                 // needs to be sha256
                 let (prk, _hk) = Hkdf::<Sha256>::extract(Some(salt), ikm);
@@ -117,23 +117,23 @@ impl KeySchedule {
     ///        HKDF-Expand-Label(Secret, Label,
     ///                          Transcript-Hash(Messages), Hash.length)
     fn derive_secret(&self, secret: &[u8], label: &[u8], _message: &[u8]) -> Vec<u8> {
-        let transcript_hash = match self.hash_len {
+        let transcript_hash = match self.hash {
             KeyScheduleHash::Sha256 => transcript::transcript_hash::<Sha256>(&[]),
             KeyScheduleHash::Sha384 => transcript::transcript_hash::<Sha384>(&[]),
         };
 
-        match self.hash_len {
+        match self.hash {
             KeyScheduleHash::Sha256 => hkdf_expand_label::<Sha256>(
                 secret,
                 label,
                 &transcript_hash,
-                self.hash_len.hash_len() as u16,
+                self.hash.hash_len() as u16,
             ),
             KeyScheduleHash::Sha384 => hkdf_expand_label::<Sha384>(
                 secret,
                 label,
                 &transcript_hash,
-                self.hash_len.hash_len() as u16,
+                self.hash.hash_len() as u16,
             ),
         }
     }
@@ -145,10 +145,10 @@ impl KeySchedule {
     fn to_early_secret(&mut self, psk: Option<Vec<u8>>) {
         debug_assert_eq!(self.state, KeyScheduleState::Initial);
 
-        let zero = vec![0; self.hash_len.hash_len()];
+        let zero = vec![0; self.hash.hash_len()];
         let psk = match psk {
             Some(value) => {
-                assert_eq!(value.len(), self.hash_len.hash_len());
+                assert_eq!(value.len(), self.hash.hash_len());
                 value
             }
             None => zero.clone(),
@@ -168,10 +168,14 @@ impl KeySchedule {
         Vec::new()
     }
 
-    fn to_handshake_secret(&mut self, _shared_secret: &[u8]) {
+    // `shared_secret` is the result of the (EC)DHE computation after exchanging
+    // key shares.
+    fn to_handshake_secret(&mut self, shared_secret: &[u8]) {
         debug_assert_eq!(self.state, KeyScheduleState::EarlySecret);
 
-        //
+        self.secret = Self::derive_secret(&self, &self.secret, b"derived", &[]);
+
+        self.secret = Self::hkdf_extract(&self, &shared_secret, &self.secret);
 
         self.state = KeyScheduleState::HandshakeSecret
     }
@@ -216,12 +220,18 @@ impl KeySchedule {
     ///////////////////            Master Secret          //////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    fn client_application_traffic_secret_0(&self, _transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    fn client_application_traffic_secret_0(
+        &self,
+        _transcript: &[HandshakeMessageValue],
+    ) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         Vec::new()
     }
 
-    fn server_application_traffic_secret_0(&self, _transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    fn server_application_traffic_secret_0(
+        &self,
+        _transcript: &[HandshakeMessageValue],
+    ) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         Vec::new()
     }
@@ -231,10 +241,11 @@ impl KeySchedule {
 mod tests {
     use crate::derivation::{KeySchedule, KeyScheduleHash};
 
+    /// https://www.rfc-editor.org/info/rfc8448/
     #[test]
-    fn schedule() {
+    fn rfc8448_traces() {
         let mut schedule = KeySchedule {
-            hash_len: KeyScheduleHash::Sha256,
+            hash: KeyScheduleHash::Sha256,
             secret: Vec::new(),
             state: super::KeyScheduleState::Initial,
         };
@@ -249,5 +260,45 @@ mod tests {
             hex::decode(input).unwrap()
         };
         assert_eq!(secret, expected_secret);
+
+        // handshake secret
+        let diffie_hellman_secret = {
+            let input = "8b d4 05 4f b5 5b 9d 63 fd fb ac f9 f0 4b 9f 0d 35 e6 d6 3f 53 75 63 ef d4 62 72 90 0f 89 49 2d";
+            let input = input.replace(" ", "");
+            hex::decode(input).unwrap()
+        };
+        schedule.to_handshake_secret(&diffie_hellman_secret);
+        let expected_secret = {
+            let input = "1d c8 26 e9 36 06 aa 6f dc 0a ad c1 2f 74 1b 01 04 6a a6 b9 9f 69 1e d2 21 a9 f0 ca 04 3f be ac";
+            let input = input.replace(" ", "");
+            hex::decode(input).unwrap()
+        };
+        assert_eq!(expected_secret, schedule.secret);
+
+        //    {server}  derive secret for handshake "tls13 derived":
+
+        //       PRK (32 octets):  33 ad 0a 1c 60 7e c0 3b 09 e6 cd 98 93 68 0c e2
+        //          10 ad f3 00 aa 1f 26 60 e1 b2 2e 10 f1 70 f9 2a
+
+        //       hash (32 octets):  e3 b0 c4 42 98 fc 1c 14 9a fb f4 c8 99 6f b9 24
+        //          27 ae 41 e4 64 9b 93 4c a4 95 99 1b 78 52 b8 55
+
+        //       info (49 octets):  00 20 0d 74 6c 73 31 33 20 64 65 72 69 76 65 64
+        //          20 e3 b0 c4 42 98 fc 1c 14 9a fb f4 c8 99 6f b9 24 27 ae 41 e4
+        //          64 9b 93 4c a4 95 99 1b 78 52 b8 55
+
+        //       expanded (32 octets):  6f 26 15 a1 08 c7 02 c5 67 8f 54 fc 9d ba
+        //          b6 97 16 c0 76 18 9c 48 25 0c eb ea c3 57 6c 36 11 ba
+
+        //    {server}  extract secret "handshake":
+
+        //       salt (32 octets):  6f 26 15 a1 08 c7 02 c5 67 8f 54 fc 9d ba b6 97
+        //          16 c0 76 18 9c 48 25 0c eb ea c3 57 6c 36 11 ba
+
+        //       IKM (32 octets):  8b d4 05 4f b5 5b 9d 63 fd fb ac f9 f0 4b 9f 0d
+        //          35 e6 d6 3f 53 75 63 ef d4 62 72 90 0f 89 49 2d
+
+        //       secret (32 octets):  1d c8 26 e9 36 06 aa 6f dc 0a ad c1 2f 74 1b
+        //          01 04 6a a6 b9 9f 69 1e d2 21 a9 f0 ca 04 3f be ac
     }
 }

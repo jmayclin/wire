@@ -63,7 +63,7 @@ enum Action {
 ///                           CONNECTED
 /// ```
 struct Client {
-    /********************** Negotiated Parameters ******************************/
+    /********************** Negotiated Parameters *****************************/
     negotiated_group: Option<iana::Group>,
     negotiated_cipher: Option<iana::Cipher>,
     negotiated_version: Option<iana::Protocol>,
@@ -94,41 +94,27 @@ impl Client {
     }
 
     fn consume_message(&mut self, message: HandshakeMessageValue) -> std::io::Result<()> {
-        let (action, message_type) = self.needed_action.clone();
-        assert_eq!(action, Action::Read);
-        assert_eq!(message.handshake_type(), message_type);
+        // state validation: we are reading/writing the correct message
+        {
+            let this_action = (Action::Read, message.handshake_type());
+            assert_eq!(this_action, self.needed_action);
+        }
+
+        // message processing
         match message {
             HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::ServerHello(
                 sh,
             )) => {
-                let negotiated_cipher = sh.cipher_suite;
-                let negotiated_version = sh
-                    .extensions
-                    .list()
-                    .iter()
-                    .find(|e| e.extension_type == ExtensionType::SupportedVersions)
-                    .map(|ext| {
-                        SupportedVersionServerHello::decode_from_exact(ext.extension_data.blob())
-                            .unwrap()
-                    })
-                    .map(|supported| supported.selected_version);
-                let key_share = sh
-                    .extensions
-                    .list()
-                    .iter()
-                    .find(|e| e.extension_type == ExtensionType::KeyShare)
-                    .map(|ext| {
-                        KeyShareServerHello::decode_from_exact(ext.extension_data.blob()).unwrap()
-                    })
-                    .map(|key_share| key_share.server_share)
-                    .unwrap();
+                let selected_cipher = sh.cipher_suite;
+                let selected_version = sh.selected_version();
+                let key_share = sh.key_share().unwrap();
 
                 // the UncompressedPointRepresentation is a specific SEC1 encoding
                 let public_key =
                     p256::PublicKey::from_sec1_bytes(key_share.key_exchange.blob()).unwrap();
 
-                self.negotiated_cipher = Some(negotiated_cipher);
-                self.negotiated_version = Some(negotiated_version.unwrap());
+                self.negotiated_cipher = Some(selected_cipher);
+                self.negotiated_version = Some(selected_version.unwrap());
                 self.negotiated_group = Some(key_share.group);
                 self.server_key_share = Some(public_key);
 
@@ -140,7 +126,9 @@ impl Client {
             }
             HandshakeMessageValue::ServerHelloConfusion(
                 ServerHelloConfusionMode::HelloRetryRequest(_sh),
-            ) => {}
+            ) => {
+                panic!("i don't support hrr yet bc im lazy")
+            }
             HandshakeMessageValue::EncryptedExtensions(ee) => {
                 println!("ee: {ee:?}");
             }
