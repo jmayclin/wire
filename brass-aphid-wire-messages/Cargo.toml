@@ -30,4 +30,9 @@ libc = "0.2.174"
 errno = "0.3"
 s2n-tls = { version = "0.3.21", features = ["unstable-testing"]}
 s2n-tls-sys = { version = "0.3.21"}
+divan = "0.1.21"
+
+[[bench]]
+name = "client_hello"
+harness = false
 

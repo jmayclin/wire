@@ -108,10 +108,20 @@ pub struct RecordProtocol<T> {
 }
 
 impl RecordProtocol<Plaintext> {
+    pub fn new() -> Self {
+        RecordProtocol { state: Plaintext::default() }
+    }
+
     pub fn select_tls13(self, cipher: iana::Cipher, secret: &[u8]) -> RecordProtocol<Tls13> {
         RecordProtocol {
             state: Tls13::new(cipher, secret),
         }
+    }
+}
+
+impl RecordProtocol<Tls13> {
+    pub fn cipher(&self) -> iana::Cipher {
+        self.state.cipher()
     }
 }
 
@@ -137,6 +147,7 @@ impl<T: RecordProtocolBehavior> RecordProtocol<T> {
         record: &'b [u8],
         plaintext: &'a mut Cursor<&'c mut [u8]>,
     ) -> std::io::Result<(Payload<'a>, &'b [u8])> {
+        println!("decapsulating {} bytes", record.len());
         // TODO: SSLv2 stuff would be handled here? But I don't have to tolerate
         // silly gooses in my personal projects
 

@@ -7,6 +7,7 @@ members = [
     "brass-aphid-wire-macros",
     "brass-aphid-wire-messages/fuzz", 
     "capability-compendium", 
+    "integration",
 ]
 
 [workspace.package]

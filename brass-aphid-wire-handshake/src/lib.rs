@@ -1,6 +1,7 @@
 mod derivation;
 mod protocol;
 mod transcript;
+mod cert;
 
 use std::task::Poll;
 
@@ -19,6 +20,8 @@ use brass_aphid_wire_messages::{
     },
 };
 use elliptic_curve::{sec1::ToSec1Point, Generate};
+
+use crate::derivation::KeySchedule;
 
 // https://www.rfc-editor.org/info/rfc8446/#appendix-A
 
@@ -62,7 +65,7 @@ enum Action {
 ///     after here                v
 ///                           CONNECTED
 /// ```
-struct Client {
+pub struct Client {
     /********************** Negotiated Parameters *****************************/
     negotiated_group: Option<iana::Group>,
     negotiated_cipher: Option<iana::Cipher>,
@@ -75,30 +78,74 @@ struct Client {
     server_cert: Option<Vec<u8>>,
 
     /**********************      State Stuff     ******************************/
+    key_schedule: Option<KeySchedule>,
     transcript: Vec<HandshakeMessageValue>,
     needed_action: (Action, HandshakeType),
 
     /*************************    🤫 Secrets 🤫    *****************************/
+    client_handshake_secret: Option<Vec<u8>>,
     server_handshake_secret: Option<Vec<u8>>,
+    client_application_secret: Option<Vec<u8>>,
+    server_application_secret: Option<Vec<u8>>,
+}
+
+pub struct ParsedCertificate<'a> {
+    subject: &'a[u8],
+    issue: &'a[u8],
+    public_key: &'a [u8],
+    signature: &'a [u8],
 }
 
 impl Client {
+    pub fn new() -> Self {
+        Self {
+            negotiated_group: None,
+            negotiated_cipher: None,
+            negotiated_version: None,
+            negotiated_signature: None,
+            client_key_share: None,
+            server_key_share: None,
+            server_cert: None,
+            key_schedule: None,
+            transcript: Vec::new(),
+            needed_action: (Action::Write, HandshakeType::ClientHello),
+            server_handshake_secret: None,
+            client_handshake_secret: None,
+            client_application_secret: None,
+            server_application_secret: None,
+        }
+    }
+
+    pub fn negotiated_cipher(&self) -> Option<iana::Cipher> {
+        self.negotiated_cipher
+    }
+
+    // client/server
+    pub fn handshake_secrets(&self) -> Option<(Vec<u8>, Vec<u8>)> {
+        match (&self.client_handshake_secret, &self.server_handshake_secret) {
+            (Some(client), Some(server)) => Some((client.clone(), server.clone())),
+            (_, _) => None,
+        }
+    }
+
     fn needed_action(&self) -> Action {
         self.needed_action.0
     }
 
-    fn read_bytes(bytes: &[u8]) -> std::io::Result<(HandshakeMessageValue, &[u8])> {
+    pub fn read_bytes(bytes: &[u8]) -> std::io::Result<(HandshakeMessageValue, &[u8])> {
         let (_handshake, _remaining) = bytes.decode_value::<HandshakeMessageValue>()?;
 
         todo!()
     }
 
-    fn consume_message(&mut self, message: HandshakeMessageValue) -> std::io::Result<()> {
+    pub fn consume_message(&mut self, message: HandshakeMessageValue) -> std::io::Result<()> {
         // state validation: we are reading/writing the correct message
         {
             let this_action = (Action::Read, message.handshake_type());
             assert_eq!(this_action, self.needed_action);
         }
+
+        self.transcript.push(message.clone());
 
         // message processing
         match message {
@@ -118,11 +165,25 @@ impl Client {
                 self.negotiated_group = Some(key_share.group);
                 self.server_key_share = Some(public_key);
 
-                let _output = self
+                // now that cipher is negotiated, populate the key schedule
+                self.key_schedule = Some(KeySchedule::new(selected_cipher.hash()));
+                self.key_schedule.as_mut().unwrap().to_early_secret(None);
+
+                let output = self
                     .client_key_share
                     .as_ref()
                     .unwrap()
                     .diffie_hellman(&public_key);
+
+                let mut key_schedule = KeySchedule::new(selected_cipher.hash());
+                key_schedule.to_early_secret(None);
+                key_schedule.to_handshake_secret(output.raw_secret_bytes());
+                self.client_handshake_secret =
+                    Some(key_schedule.server_handshake_traffic_secret(&self.transcript));
+                self.server_handshake_secret =
+                    Some(key_schedule.server_handshake_traffic_secret(&self.transcript));
+
+                self.key_schedule = Some(key_schedule)
             }
             HandshakeMessageValue::ServerHelloConfusion(
                 ServerHelloConfusionMode::HelloRetryRequest(_sh),
@@ -132,19 +193,34 @@ impl Client {
             HandshakeMessageValue::EncryptedExtensions(ee) => {
                 println!("ee: {ee:?}");
             }
-            HandshakeMessageValue::CertificateTls13(_certificate_tls13) => todo!(),
+            HandshakeMessageValue::CertificateTls13(certificate_tls13) => {
+                println!("cert tls13: {certificate_tls13:?}");
+                // perform certificate validation: the cert was issue by a trusted CA
+                let certs = certificate_tls13.certificate_list.list();
+                let parsed_certs = certs.iter().map(|cert| cert.cert_data.blob());
+            }
             HandshakeMessageValue::CertVerifyTls13(cert_verify_tls13) => {
-                let _negotiated_signature = cert_verify_tls13.algorithm;
+                println!("cert verify: {cert_verify_tls13:?}");
+                let negotiated_signature = cert_verify_tls13.algorithm;
             }
             HandshakeMessageValue::NewSessionTicketTls13(_new_session_ticket_tls13) => todo!(),
-            HandshakeMessageValue::Finished(_finished) => todo!(),
+            HandshakeMessageValue::Finished(finished) => {
+                let key_schedule = self.key_schedule.as_mut().unwrap();
+                key_schedule.to_master_secret();
+                self.client_application_secret =
+                    Some(key_schedule.client_application_traffic_secret_0(&self.transcript));
+                self.server_application_secret =
+                    Some(key_schedule.server_application_traffic_secret_0(&self.transcript));
+                // we can calculate the server thing here
+            }
             other => panic!("did not expect {other:?}"),
         }
 
+        self.increment_state();
         Ok(())
     }
 
-    fn make_message(&mut self) -> std::io::Result<HandshakeMessageValue> {
+    pub fn make_message(&mut self) -> std::io::Result<HandshakeMessageValue> {
         let (action, message) = self.needed_action.clone();
         assert_eq!(action, Action::Write);
         let message = match message {
@@ -218,6 +294,7 @@ impl Client {
             }
         };
         self.increment_state();
+        self.transcript.push(message.clone());
         Ok(message)
     }
 

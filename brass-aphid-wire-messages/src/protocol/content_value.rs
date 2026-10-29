@@ -228,8 +228,8 @@ impl EncodeValue for HandshakeMessageValue {
             handshake_message_length: message.len().try_into().unwrap(),
         };
 
-        header.encode_to(buffer);
-        message.encode_to(buffer);
+        header.encode_to(buffer)?;
+        message.encode_to(buffer)?;
         Ok(())
     }
 }

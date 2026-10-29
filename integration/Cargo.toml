@@ -1,0 +1,19 @@
+[package]
+name = "integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "integration tests exercising full client/server TLS handshakes"
+
+[dependencies]
+
+[dev-dependencies]
+s2n-tls = { version = "0.3.21", features = ["unstable-testing"] }
+
+# Internal crates under test
+brass-aphid-wire-macros = { version = "0.0.5", path = "../brass-aphid-wire-macros" }
+brass-aphid-wire-messages = { version = "0.0.6", path = "../brass-aphid-wire-messages" }
+brass-aphid-wire-record = { version = "0.0.3", path = "../brass-aphid-wire-record" }
+brass-aphid-wire-handshake = { version = "0.0.3", path = "../brass-aphid-wire-handshake" }
+brass-aphid-wire-decryption = { version = "0.0.4", path = "../brass-aphid-wire-decryption" }

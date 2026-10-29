@@ -235,6 +235,14 @@ pub struct Tls13 {
 }
 
 impl Tls13 {
+    pub fn cipher(&self) -> iana::Cipher {
+        match &self.cipher {
+            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv } => iana::constants::TLS_AES_128_GCM_SHA256,
+            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv } => iana::constants::TLS_AES_256_GCM_SHA384,
+            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv } => iana::constants::TLS_CHACHA20_POLY1305_SHA256,
+        }
+    }
+    
     pub fn new(cipher: iana::Cipher, secret: &[u8]) -> Self {
         let cipher = Tls13Cipher::from_iana(cipher, secret).unwrap();
         Self {
