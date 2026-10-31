@@ -89,6 +89,11 @@ pub struct Client {
     server_application_secret: Option<Vec<u8>>,
 }
 
+// 1. convert all CN/SANs to a list of entries
+//    -> no stupid "the CN only applies if there aren't SANs"
+//    -> if you don't want me to use it, then don't put it in there
+// I don't respect "notBefore". I don't respect "nameConstraints". I don't respect
+// critical extensions. You're not my supervisor.
 pub struct ParsedCertificate<'a> {
     subject: &'a [u8],
     issue: &'a [u8],
