@@ -10,9 +10,7 @@ use std::{
 };
 
 use brass_aphid_wire_messages::{
-    codec::{DecodeValue, DecodeValueWithContext, EncodeValue},
-    iana::Protocol,
-    protocol::{content_value::HandshakeMessageValue, ContentType},
+    codec::{DecodeValue, DecodeValueWithContext, EncodeValue}, iana::Protocol, protocol::{ContentType, handshake::HandshakeMessage},
 };
 use brass_aphid_wire_record::{Plaintext, RecordProtocol, RecordProtocolBehavior};
 use s2n_tls::{config::Config, security::Policy, testing::TestPair};
@@ -120,7 +118,7 @@ fn basic_handshake() {
             .unwrap();
         let handshake = record.assert_handshake();
 
-        let hsm = HandshakeMessageValue::decode_from_exact(handshake).unwrap();
+        let hsm = HandshakeMessage::decode_from_exact(handshake).unwrap();
         client.consume_message(hsm).unwrap();
         cursor.set_position(0);
 
@@ -136,16 +134,12 @@ fn basic_handshake() {
             &client.handshake_secrets().unwrap().1,
         );
 
-        let cipher = record_protocol.cipher();
-        let protocol = Protocol::TLSv1_3;
-        let decode_context = (protocol, cipher);
-
         // record 3 - EE
         let (mut record, remaining) = record_protocol
             .decapsulate_bytes(remaining, &mut cursor)
             .unwrap();
         let handshake = record.assert_handshake();
-        let hsm = HandshakeMessageValue::decode_from_exact(handshake).unwrap();
+        let hsm = HandshakeMessage::decode_from_exact(handshake).unwrap();
         client.consume_message(hsm).unwrap();
 
         // record 4 - Certificate
@@ -154,7 +148,7 @@ fn basic_handshake() {
             .unwrap();
         let handshake = record.assert_handshake();
         let hsm =
-            HandshakeMessageValue::decode_from_with_context_exact(handshake, decode_context).unwrap();
+            HandshakeMessage::decode_from_exact(handshake).unwrap();
         client.consume_message(hsm).unwrap();
 
         // record 5 - Cert Verify
@@ -162,7 +156,7 @@ fn basic_handshake() {
             .decapsulate_bytes(remaining, &mut cursor)
             .unwrap();
         let handshake = record.assert_handshake();
-        let hsm = HandshakeMessageValue::decode_from_with_context_exact(handshake, decode_context).unwrap();
+        let hsm = HandshakeMessage::decode_from_exact(handshake).unwrap();
         client.consume_message(hsm).unwrap();
 
         // record 6 - Finished
@@ -170,7 +164,7 @@ fn basic_handshake() {
             .decapsulate_bytes(remaining, &mut cursor)
             .unwrap();
         let handshake = record.assert_handshake();
-        let hsm = HandshakeMessageValue::decode_from_with_context_exact(handshake, decode_context).unwrap();
+        let hsm = HandshakeMessage::decode_from_exact(handshake).unwrap();
         client.consume_message(hsm).unwrap();
     }
 

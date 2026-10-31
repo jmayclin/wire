@@ -14,8 +14,14 @@
 //! ### Future Development
 //! Ideally all of the codec stuff would be moved to a different crate, and we'd
 //! have proc macros to derive the `EncodeValue` and `DecodeValue` traits.
+//!
+//! ### &[u8] vs &mut [u8]
+//! I tries making the codec generic over a DecodeByteSource, which was implemented
+//! by &[u8] and &mut [u8], but that felt kinda icky. And made things much more
+//! generic and nasty. I prefer the simple version: everything decodes from a plain `&[u8]`.
 
-use std::io::{self, Cursor, ErrorKind, Write};
+use byteorder::{BigEndian, ReadBytesExt};
+use std::io::{self, Cursor, ErrorKind, Read, Write};
 
 pub trait CursorSplit<'a> {
     fn split(self) -> (&'a mut [u8], &'a mut [u8]);
@@ -29,41 +35,41 @@ impl<'a> CursorSplit<'a> for std::io::Cursor<&'a mut [u8]> {
     }
 }
 
-/// This trait defines a source that values can be decoded from.
-pub trait DecodeByteSource: Sized {
-    fn decode_value<T: DecodeValue>(self) -> io::Result<(T, Self)> {
-        T::decode_from(self)
-    }
-    fn decode_value_exact<T: DecodeValue>(self) -> io::Result<T> {
-        T::decode_from_exact(self)
-    }
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-    fn len(&self) -> usize;
-    fn pull(self, length: usize) -> io::Result<(Self, Self)>;
-    fn freeze(&self) -> &[u8];
+/// This trait defines a source that values can be decoded from. It is only
+/// implemented for `&[u8]`, and exists to make chained decoding ergonomic:
+/// `let (value, remaining) = buffer.decode_value()?;`
+pub trait DecodeByteSource<'a>: Sized {
+    fn decode_value<T: DecodeValue<'a>>(&self) -> io::Result<(T, &'a [u8])>;
+    fn decode_value_exact<T: DecodeValue<'a>>(&self) -> io::Result<T>;
+    fn decode_value_context<T: DecodeValueWithContext<'a>>(
+        &self,
+        context: T::Context,
+    ) -> io::Result<(T, &'a [u8])>;
+    fn decode_value_context_exact<T: DecodeValueWithContext<'a>>(
+        &self,
+        context: T::Context,
+    ) -> io::Result<T>;
 }
 
-/// This trait defines a sink that values can be encoded to. Currently this is
-/// only implemented for `Vec<u8>`.
-///
-/// This is less efficient than relying on buffers, because encode calls might
-/// result in allocations. But the benefit is that it's much more ergonomic.
-pub trait EncodeBytesSink<T: EncodeValue>: Sized {
+/// This trait defines a sink that values can be encoded to. It is implemented
+/// for `Cursor<&mut [u8]>`.
+pub trait EncodeBytesSink<T: EncodeValue> {
     fn encode_value(&mut self, value: &T) -> io::Result<()>;
 }
 
 /// This trait defines a type that can be decoded from bytes.
-pub trait DecodeValue: Sized {
+///
+/// The `'a` lifetime is the lifetime of the buffer being decoded. Types that
+/// borrow from the buffer (e.g. `PrefixedBlob<'a, L>`) are tied to it.
+pub trait DecodeValue<'a>: Sized {
     /// decode the value from a buffer of bytes, returning any remaining bytes.
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)>;
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])>;
 
     /// decode the value from a buffer of bytes, consuming the entire buffer.
     ///
     /// If there is data remaining in the buffer after decoding the value, an
     /// error is returned.
-    fn decode_from_exact<S: DecodeByteSource>(buffer: S) -> std::io::Result<Self> {
+    fn decode_from_exact(buffer: &'a [u8]) -> std::io::Result<Self> {
         let (value, remaining) = Self::decode_from(buffer)?;
         if remaining.is_empty() {
             Ok(value)
@@ -91,16 +97,16 @@ pub trait DecodeValue: Sized {
 /// - Finished: the signature in the Finished message is _not_ length prefixed.
 ///   You need to know what hash the connection is using, and that isn't specified
 ///   as part of the Finished message.
-pub trait DecodeValueWithContext: Sized {
+pub trait DecodeValueWithContext<'a>: Sized {
     type Context;
 
-    fn decode_from_with_context<S: DecodeByteSource>(
-        buffer: S,
+    fn decode_from_with_context(
+        buffer: &'a [u8],
         context: Self::Context,
-    ) -> std::io::Result<(Self, S)>;
+    ) -> std::io::Result<(Self, &'a [u8])>;
 
-    fn decode_from_with_context_exact<S: DecodeByteSource>(
-        buffer: S,
+    fn decode_from_with_context_exact(
+        buffer: &'a [u8],
         context: Self::Context,
     ) -> std::io::Result<Self> {
         let (value, remaining) = Self::decode_from_with_context(buffer, context)?;
@@ -119,7 +125,7 @@ pub trait DecodeValueWithContext: Sized {
 }
 
 /// This trait defines a type that can be encoded into bytes.
-pub trait EncodeValue: Sized {
+pub trait EncodeValue {
     fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()>;
 
     fn encode_to_vec(&self) -> std::io::Result<Vec<u8>> {
@@ -154,65 +160,29 @@ pub trait EncodeValue: Sized {
 
 //////////////////////////// Source + Sink Impls ///////////////////////////////
 
-impl DecodeByteSource for &[u8] {
-    fn len(&self) -> usize {
-        <[u8]>::len(self)
+impl<'a> DecodeByteSource<'a> for &'a [u8] {
+    fn decode_value<T: DecodeValue<'a>>(&self) -> io::Result<(T, &'a [u8])> {
+        T::decode_from(*self)
     }
 
-    fn pull(self, length: usize) -> io::Result<(Self, Self)> {
-        if self.len() < length {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                "no bytes remain",
-            ));
-        }
-        Ok(self.split_at(length))
+    fn decode_value_exact<T: DecodeValue<'a>>(&self) -> io::Result<T> {
+        T::decode_from_exact(*self)
     }
 
-    fn freeze(&self) -> &[u8] {
-        self
-    }
-}
-
-impl DecodeByteSource for &mut [u8] {
-    fn len(&self) -> usize {
-        <[u8]>::len(self)
+    fn decode_value_context<T: DecodeValueWithContext<'a>>(
+        &self,
+        context: T::Context,
+    ) -> io::Result<(T, &'a [u8])> {
+        T::decode_from_with_context(*self, context)
     }
 
-    fn pull(self, length: usize) -> io::Result<(Self, Self)> {
-        if self.len() < length {
-            return Err(std::io::Error::new(
-                ErrorKind::InvalidInput,
-                "no bytes remain",
-            ));
-        }
-        Ok(self.split_at_mut(length))
-    }
-
-    fn freeze(&self) -> &[u8] {
-        self
+    fn decode_value_context_exact<T: DecodeValueWithContext<'a>>(
+        &self,
+        context: T::Context,
+    ) -> io::Result<T> {
+        T::decode_from_with_context_exact(*self, context)
     }
 }
-
-// impl DecodeByteSource for Cursor<&mut [u8]> {
-//     fn len(&self) -> usize {
-//         self.get_ref().len() - (self.position() as usize)
-//     }
-
-//     fn pull(self, length: usize) -> io::Result<(Self, Self)> {
-//         if self.len() < length {
-//             return Err(std::io::Error::new(
-//                 ErrorKind::InvalidInput,
-//                 "no bytes remain",
-//             ));
-//         }
-//         Ok(self.split_at_mut(length))
-//     }
-
-//     fn freeze(&self) -> &[u8] {
-//         self
-//     }
-// }
 
 impl<T: EncodeValue> EncodeBytesSink<T> for Cursor<&mut [u8]> {
     fn encode_value(&mut self, value: &T) -> io::Result<()> {
@@ -220,44 +190,42 @@ impl<T: EncodeValue> EncodeBytesSink<T> for Cursor<&mut [u8]> {
     }
 }
 
+/// Split `length` bytes off the front of `buffer`, returning `(taken, remaining)`.
+///
+/// Errors if fewer than `length` bytes are available.
+pub fn take<'a>(buffer: &'a [u8], length: usize) -> io::Result<(&'a [u8], &'a [u8])> {
+    if buffer.len() < length {
+        return Err(io::Error::new(ErrorKind::UnexpectedEof, "no bytes remain"));
+    }
+    Ok(buffer.split_at(length))
+}
+
 //////////////////////////// Primitive Impls ///////////////////////////////////
-impl DecodeValue for u8 {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
-        let value = value.freeze();
-        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
-        let value = Self::from_be_bytes(value);
-        Ok((value, remaining))
+impl<'a> DecodeValue<'a> for u8 {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let value = buffer.read_u8()?;
+        Ok((value, buffer))
     }
 }
 
-impl DecodeValue for u16 {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
-        let value = value.freeze();
-        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
-        let value = Self::from_be_bytes(value);
-        Ok((value, remaining))
+impl<'a> DecodeValue<'a> for u16 {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let value = buffer.read_u16::<BigEndian>()?;
+        Ok((value, buffer))
     }
 }
 
-impl DecodeValue for u32 {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
-        let value = value.freeze();
-        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
-        let value = Self::from_be_bytes(value);
-        Ok((value, remaining))
+impl<'a> DecodeValue<'a> for u32 {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let value = buffer.read_u32::<BigEndian>()?;
+        Ok((value, buffer))
     }
 }
 
-impl DecodeValue for u64 {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(std::mem::size_of::<Self>())?;
-        let value = value.freeze();
-        let value: [u8; std::mem::size_of::<Self>()] = value.try_into().unwrap();
-        let value = Self::from_be_bytes(value);
-        Ok((value, remaining))
+impl<'a> DecodeValue<'a> for u64 {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let value = buffer.read_u64::<BigEndian>()?;
+        Ok((value, buffer))
     }
 }
 
@@ -291,14 +259,19 @@ impl EncodeValue for u64 {
 
 // Implement Decode and Encode for byte arrays
 
-impl<const L: usize> DecodeValue for [u8; L] {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(L)?;
-        let value = value.freeze().try_into().map_err(|_e| {
-            std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
-        })?;
+impl<'a, const L: usize> DecodeValue<'a> for [u8; L] {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let mut value = [0; L];
+        buffer.read_exact(&mut value)?;
+        Ok((value, buffer))
+    }
+}
 
-        Ok((value, remaining))
+/// A byte slice encodes as exactly its bytes, with no length prefix.
+impl EncodeValue for [u8] {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
+        buffer.write_all(self)?;
+        Ok(())
     }
 }
 
@@ -331,23 +304,27 @@ impl<T: EncodeValue> EncodeValue for Vec<T> {
     }
 }
 
+/// Bytes with no length prefix. The length comes from somewhere else, so this is
+/// only ever decoded with context.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RawBytes<'a>(pub &'a [u8]);
+
+impl EncodeValue for RawBytes<'_> {
+    fn encode_to(&self, buffer: &mut Cursor<&mut [u8]>) -> std::io::Result<()> {
+        buffer.write_all(self.0)
+    }
+}
+
 /// u24 is not defined in the rust standard library but it is relatively common
 /// in TLS messages. You can use `codec::U24` in TLS messages definitions to easily
 /// encode or decode the correct value.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct U24(pub u32);
 
-impl DecodeValue for U24 {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
-        let (value, remaining) = buffer.pull(3)?;
-        let value = value.freeze();
-        let value: [u8; 3] = value.try_into().map_err(|_e| {
-            std::io::Error::new(ErrorKind::InvalidData, "unable to convert to array")
-        })?;
-
-        // TODO: check the ordering on this one
-        let value = u32::from_be_bytes([0, value[0], value[1], value[2]]);
-        Ok((U24(value), remaining))
+impl<'a> DecodeValue<'a> for U24 {
+    fn decode_from(mut buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
+        let u24 = buffer.read_u24::<BigEndian>()?;
+        Ok((U24(u24), buffer))
     }
 }
 
@@ -361,13 +338,20 @@ impl EncodeValue for U24 {
     }
 }
 
+impl U24 {
+    pub const MAX: usize = 0xFF_FFFF;
+}
+
 impl TryFrom<usize> for U24 {
     type Error = ();
 
+    /// Fails, rather than truncating, if the value doesn't fit in 24 bits.
     fn try_from(value: usize) -> Result<Self, Self::Error> {
-        let u32 = value as u32;
-        assert_eq!(u32.to_be_bytes()[0], 0);
-        Ok(Self(u32))
+        if value > Self::MAX {
+            Err(())
+        } else {
+            Ok(Self(value as u32))
+        }
     }
 }
 
@@ -400,16 +384,7 @@ mod tests {
         let buffer = record_header_then_123();
         let buffer: &[u8] = buffer.as_slice();
 
-        let (_, remaining): (RecordHeader, &[u8]) = buffer.decode_value::<RecordHeader>().unwrap();
+        let (_, remaining): (RecordHeader, &[u8]) = buffer.decode_value().unwrap();
         assert_eq!(remaining, &[1, 2, 3]);
-    }
-
-    #[test]
-    fn mutable_decode() {
-        let mut buffer = record_header_then_123();
-        let buffer: &mut [u8] = buffer.as_mut_slice();
-
-        let (_, remaining): (RecordHeader, &mut [u8]) = buffer.decode_value().unwrap();
-        assert_eq!(remaining, &mut [1, 2, 3]);
     }
 }

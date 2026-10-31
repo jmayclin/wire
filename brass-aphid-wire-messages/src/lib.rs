@@ -2,6 +2,7 @@ pub mod codec;
 pub mod iana;
 pub mod prefixed_list;
 pub mod protocol;
+pub mod writer;
 #[cfg(test)]
 pub mod testing;
 

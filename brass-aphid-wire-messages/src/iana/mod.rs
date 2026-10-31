@@ -9,22 +9,22 @@ use crate::{
 use brass_aphid_wire_macros::{DecodeEnum, EncodeEnum};
 pub use definitions::*;
 
-impl DecodeValue for SignatureScheme {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+impl<'a> DecodeValue<'a> for SignatureScheme {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (value, remaining) = buffer.decode_value()?;
         Ok((SignatureScheme { value }, remaining))
     }
 }
 
-impl DecodeValue for Group {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+impl<'a> DecodeValue<'a> for Group {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (value, remaining) = buffer.decode_value()?;
         Ok((Group { value }, remaining))
     }
 }
 
-impl DecodeValue for Cipher {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+impl<'a> DecodeValue<'a> for Cipher {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (value, remaining) = buffer.decode_value()?;
         Ok((Cipher { value }, remaining))
     }
@@ -89,18 +89,34 @@ pub enum Protocol {
 impl_byte_value!(Protocol, u16);
 
 impl Cipher {
-    pub fn hash(&self) -> HashAlgorithm {
-        let description = self.description().expect("no description for cipher");
+    /// The hash used by the cipher suite, or `None` if the cipher isn't known or
+    /// doesn't name a hash (e.g. the signalling suites like
+    /// `TLS_EMPTY_RENEGOTIATION_INFO_SCSV`).
+    ///
+    /// Prefer this over [`Cipher::hash`] for any cipher that came from a peer.
+    pub fn try_hash(&self) -> Option<HashAlgorithm> {
+        let description = self.description()?;
         if description.ends_with("SHA512") {
-            HashAlgorithm::Sha512
+            Some(HashAlgorithm::Sha512)
         } else if description.ends_with("SHA384") {
-            HashAlgorithm::Sha384
+            Some(HashAlgorithm::Sha384)
         } else if description.ends_with("SHA256") {
-            HashAlgorithm::Sha256
+            Some(HashAlgorithm::Sha256)
         } else if description.ends_with("SHA224") {
-            HashAlgorithm::Sha224
+            Some(HashAlgorithm::Sha224)
         } else {
-            todo!("no recognized hash for {self}");
+            None
+        }
+    }
+
+    /// Like [`Cipher::try_hash`], but panics if there is no hash.
+    pub fn hash(&self) -> HashAlgorithm {
+        match self.try_hash() {
+            Some(hash) => hash,
+            None => match self.description() {
+                Some(_) => todo!("no recognized hash for {self}"),
+                None => panic!("no description for cipher"),
+            },
         }
     }
 }

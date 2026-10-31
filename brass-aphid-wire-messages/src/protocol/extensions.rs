@@ -11,31 +11,90 @@
 use crate::codec::{DecodeValueWithContext, EncodeBytesSink};
 use crate::discriminant::impl_byte_value;
 use crate::iana;
+use crate::prefixed_list::PrefixedBlobWriter;
 use crate::protocol::SigHashOrScheme;
+use crate::writer::Writer;
 use crate::{
     codec::{DecodeByteSource, DecodeValue, EncodeValue},
     iana::Protocol,
     prefixed_list::{PrefixedBlob, PrefixedList},
 };
-use brass_aphid_wire_macros::{DecodeEnum, DecodeStruct, EncodeEnum, EncodeStruct};
+use brass_aphid_wire_macros::{DecodeEnum, DecodeStruct, EncodeEnum, EncodeStruct, Writer};
 use std::fmt::Debug;
 use std::io::ErrorKind;
 use strum::IntoEnumIterator;
 
 /// This is the "basic" extension struct. Any extension will be able to be parsed
 #[derive(Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct Extension {
+pub struct Extension<'a> {
     // TODO: emit metrics whenever we see an extension type that isn't recognized
     pub extension_type: ExtensionType,
-    pub extension_data: PrefixedBlob<u16>,
+    pub extension_data: PrefixedBlob<'a, u16>,
 }
 
-impl std::fmt::Debug for Extension {
+impl std::fmt::Debug for Extension<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Extension")
             .field("extension_type", &self.extension_type)
             .field("extension_data(len)", &self.extension_data.blob().len())
             .finish()
+    }
+}
+
+/// An extension body that knows which [`ExtensionType`] it is sent under.
+///
+/// This is what lets [`ExtensionWriter::of`] take the type code from the body's
+/// type, so a body can not be paired with the wrong code. The same code can have
+/// different bodies in different messages (`key_share` has three), and each is
+/// its own type.
+pub trait ExtensionData {
+    const TYPE: ExtensionType;
+}
+
+/// The write side of [`Extension`]: a type code and a u16 length prefixed body.
+///
+/// The body is type erased so that differently typed extensions can share one
+/// slice type. [`ExtensionWriter::of`] checks the body against the type code
+/// before erasing it.
+pub struct ExtensionWriter<'w> {
+    extension_type: ExtensionType,
+    body: &'w dyn EncodeValue,
+}
+
+impl<'w> ExtensionWriter<'w> {
+    /// `E` selects the type code, and the body must be able to write itself as
+    /// an `E`: `ExtensionWriter::of::<SupportedGroups>(&groups)`.
+    ///
+    /// The body also has to be an `EncodeValue`, which is what makes it
+    /// erasable. For a derived writer the two are the same encoding.
+    pub fn of<E: ExtensionData>(body: &'w (impl Writer<E> + EncodeValue)) -> Self {
+        Self {
+            extension_type: E::TYPE,
+            body,
+        }
+    }
+
+    /// For extensions without a typed body, such as GREASE. Nothing checks the
+    /// pairing of the type code and the body.
+    pub fn raw(extension_type: ExtensionType, body: &'w dyn EncodeValue) -> Self {
+        Self {
+            extension_type,
+            body,
+        }
+    }
+}
+
+impl EncodeValue for ExtensionWriter<'_> {
+    fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
+        self.extension_type.encode_to(buffer)?;
+        PrefixedBlobWriter::<u16, dyn EncodeValue>::new(self.body).encode_to(buffer)
+    }
+}
+
+/// So that a slice of `ExtensionWriter` is a writer for a list of `Extension`.
+impl<'w, 'a> Writer<Extension<'a>> for ExtensionWriter<'w> {
+    fn encode_transform(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
+        self.encode_to(buffer)
     }
 }
 
@@ -93,8 +152,8 @@ impl EncodeValue for ExtensionType {
     }
 }
 
-impl DecodeValue for ExtensionType {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+impl<'a> DecodeValue<'a> for ExtensionType {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (value, buffer) = u16::decode_from(buffer)?;
         let value = match ExtensionType::iter().find(|x| x.byte_value() == value) {
             Some(ExtensionType::Unknown(_)) => ExtensionType::Unknown(value),
@@ -114,12 +173,12 @@ enum NameType {
 impl_byte_value!(NameType, u8);
 
 #[derive(DecodeStruct, PartialEq, Eq, Clone, EncodeStruct)]
-pub struct ServerName {
+pub struct ServerName<'a> {
     name_type: NameType,
-    pub host_name: PrefixedBlob<u16>,
+    pub host_name: PrefixedBlob<'a, u16>,
 }
 
-impl Debug for ServerName {
+impl Debug for ServerName<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ServerName")
             .field("name_type", &self.name_type)
@@ -130,24 +189,24 @@ impl Debug for ServerName {
 
 /// the actual extension value for an SNI extension
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct ServerNameClientHello {
-    pub server_name_list: PrefixedList<ServerName, u16>,
+pub struct ServerNameClientHello<'a> {
+    pub server_name_list: PrefixedList<'a, ServerName<'a>, u16>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct SupportedVersionClientHello {
-    pub versions: PrefixedList<Protocol, u8>,
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct SupportedVersionClientHello<'a> {
+    pub versions: PrefixedList<'a, Protocol, u8>,
 }
 
 /// https://www.rfc-editor.org/rfc/rfc8422.html#section-5.1.1
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct SupportedGroups {
-    pub named_curve_list: PrefixedList<iana::Group, u16>,
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct SupportedGroups<'a> {
+    pub named_curve_list: PrefixedList<'a, iana::Group, u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct ServerSupportedVersions {
-    versions: PrefixedList<Protocol, u8>,
+pub struct ServerSupportedVersions<'a> {
+    versions: PrefixedList<'a, Protocol, u8>,
 }
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc4492#section-5.1.2
@@ -164,8 +223,8 @@ impl_byte_value!(EcPointFormat, u8);
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc4492#section-5.1.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct EcPointFormatList {
-    pub ec_point_format_list: PrefixedList<EcPointFormat, u8>,
+pub struct EcPointFormatList<'a> {
+    pub ec_point_format_list: PrefixedList<'a, EcPointFormat, u8>,
 }
 
 /// Defined in https://www.ietf.org/rfc/rfc7627.html#section-5.1
@@ -181,8 +240,8 @@ pub struct PostHandshakeAuth {}
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5746#section-3.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct RenegotiationInfo {
-    renegotiated_connection: PrefixedBlob<u8>,
+pub struct RenegotiationInfo<'a> {
+    renegotiated_connection: PrefixedBlob<'a, u8>,
 }
 
 /// https://www.rfc-editor.org/rfc/rfc6066#section-4
@@ -205,27 +264,27 @@ pub struct SrtpProtectionProfile {
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc5764#section-4.1.1
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct UseSrtpClientHello {
-    pub protection_profiles: PrefixedList<SrtpProtectionProfile, u16>,
-    pub srtp_mki: PrefixedBlob<u8>,
+pub struct UseSrtpClientHello<'a> {
+    pub protection_profiles: PrefixedList<'a, SrtpProtectionProfile, u16>,
+    pub srtp_mki: PrefixedBlob<'a, u8>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-4.1
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct CertificateTypeClientHello {
-    pub certificate_types: PrefixedList<CertificateType, u8>,
+pub struct CertificateTypeClientHello<'a> {
+    pub certificate_types: PrefixedList<'a, CertificateType, u8>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.2
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct Cookie {
-    pub cookie: PrefixedBlob<u16>,
+pub struct Cookie<'a> {
+    pub cookie: PrefixedBlob<'a, u16>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct KeyShare {
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct KeyShare<'a> {
     pub group: iana::Group,
-    pub key_exchange: PrefixedBlob<u16>,
+    pub key_exchange: PrefixedBlob<'a, u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
@@ -239,8 +298,8 @@ impl_byte_value!(PskKeyExchangeMode, u8);
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.9
 #[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct PskKeyExchangeModes {
-    ke_modes: PrefixedList<PskKeyExchangeMode, u8>,
+pub struct PskKeyExchangeModes<'a> {
+    ke_modes: PrefixedList<'a, PskKeyExchangeMode, u8>,
 }
 
 //    enum {
@@ -268,16 +327,16 @@ pub struct SessionTicket {
     pub ticket: Vec<u8>,
 }
 
-impl DecodeValueWithContext for SessionTicket {
+impl<'a> DecodeValueWithContext<'a> for SessionTicket {
     /// the length of the extension data
     type Context = u16;
 
-    fn decode_from_with_context<S: DecodeByteSource>(
-        buffer: S,
+    fn decode_from_with_context(
+        buffer: &'a [u8],
         context: Self::Context,
-    ) -> std::io::Result<(Self, S)> {
-        let (ticket, buffer) = buffer.pull(context as usize)?;
-        let ticket = ticket.freeze().to_vec();
+    ) -> std::io::Result<(Self, &'a [u8])> {
+        let (ticket, buffer) = crate::codec::take(buffer, context as usize)?;
+        let ticket = ticket.to_vec();
         let value = Self { ticket };
         Ok((value, buffer))
     }
@@ -290,16 +349,16 @@ pub struct Padding {
     pub padding: Vec<u8>,
 }
 
-impl DecodeValueWithContext for Padding {
+impl<'a> DecodeValueWithContext<'a> for Padding {
     /// length of the extension data
     type Context = u16;
 
-    fn decode_from_with_context<S: DecodeByteSource>(
-        buffer: S,
+    fn decode_from_with_context(
+        buffer: &'a [u8],
         context: Self::Context,
-    ) -> std::io::Result<(Self, S)> {
-        let (padding, buffer) = buffer.pull(context as usize)?;
-        let padding = padding.freeze().to_vec();
+    ) -> std::io::Result<(Self, &'a [u8])> {
+        let (padding, buffer) = crate::codec::take(buffer, context as usize)?;
+        let padding = padding.to_vec();
         let value = Self { padding };
         Ok((value, buffer))
     }
@@ -314,9 +373,9 @@ pub struct RecordSizeLimit {
     pub limit: u16,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct KeyShareClientHello {
-    pub client_shares: PrefixedList<KeyShare, u16>,
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct KeyShareClientHello<'a> {
+    pub client_shares: PrefixedList<'a, KeyShare<'a>, u16>,
 }
 
 ///= https://www.rfc-editor.org/rfc/rfc8446#section-4.2.8
@@ -330,7 +389,7 @@ pub struct KeyShareClientHello {
 ///> ```
 ///> selected_group:  The mutually supported group the server intends to negotiate
 ///> and is requesting a retried ClientHello/KeyShare for.
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
 pub struct KeyShareRetryRequest {
     pub selected_group: iana::Group,
 }
@@ -345,37 +404,37 @@ pub struct KeyShareRetryRequest {
 ///>
 ///> server_share:  A single KeyShareEntry value that is in the same group as one
 ///> of the client's shares.
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct KeyShareServerHello {
-    pub server_share: KeyShare,
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct KeyShareServerHello<'a> {
+    pub server_share: KeyShare<'a>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct SignatureSchemeList {
-    pub supported_signature_algorithms: PrefixedList<SigHashOrScheme, u16>,
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
+pub struct SignatureSchemeList<'a> {
+    pub supported_signature_algorithms: PrefixedList<'a, SigHashOrScheme, u16>,
 }
 
 /// definition: https://datatracker.ietf.org/doc/html/rfc8446#section-4.2.1
-#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct)]
+#[derive(Debug, Clone, PartialEq, Eq, DecodeStruct, EncodeStruct, Writer)]
 pub struct SupportedVersionServerHello {
     pub selected_version: Protocol,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct PskIdentity {
-    pub identity: PrefixedBlob<u16>,
+pub struct PskIdentity<'a> {
+    pub identity: PrefixedBlob<'a, u16>,
     pub obfuscated_ticket_age: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct PskBinderEntry {
-    entry: PrefixedBlob<u8>,
+pub struct PskBinderEntry<'a> {
+    entry: PrefixedBlob<'a, u8>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct PresharedKeyClientHello {
-    pub identities: PrefixedList<PskIdentity, u16>,
-    pub binders: PrefixedList<PskBinderEntry, u16>,
+pub struct PresharedKeyClientHello<'a> {
+    pub identities: PrefixedList<'a, PskIdentity<'a>, u16>,
+    pub binders: PrefixedList<'a, PskBinderEntry<'a>, u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
@@ -387,33 +446,33 @@ enum CertificateStatusType {
 impl_byte_value!(CertificateStatusType, u8);
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-struct OcspStatusRequest {
-    responder_id_list: PrefixedList<ResponderId, u16>,
-    extensions: PrefixedBlob<u16>,
+struct OcspStatusRequest<'a> {
+    responder_id_list: PrefixedList<'a, ResponderId<'a>, u16>,
+    extensions: PrefixedBlob<'a, u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-struct ResponderId {
-    id: PrefixedBlob<u16>,
+struct ResponderId<'a> {
+    id: PrefixedBlob<'a, u16>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc6066.html#section-8
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct CertificateStatus {
+pub struct CertificateStatus<'a> {
     status_type: CertificateStatusType,
-    request: OcspStatusRequest,
+    request: OcspStatusRequest<'a>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7301#section-3.1
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct ApplicationLayerProtocolNegotiation {
-    protocol_name_list: PrefixedList<ProtocolName, u16>,
+pub struct ApplicationLayerProtocolNegotiation<'a> {
+    protocol_name_list: PrefixedList<'a, ProtocolName<'a>, u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
 /// Defined in https://www.rfc-editor.org/rfc/rfc7301#section-3.1
-pub struct ProtocolName {
-    name: PrefixedBlob<u8>,
+pub struct ProtocolName<'a> {
+    name: PrefixedBlob<'a, u8>,
 }
 
 /// Defined in https://datatracker.ietf.org/doc/html/rfc7366#section-2
@@ -439,8 +498,8 @@ impl_byte_value!(CertificateType, u8);
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct ClientCertTypeClientHello {
-    client_certificate_types: PrefixedList<CertificateType, u8>,
+pub struct ClientCertTypeClientHello<'a> {
+    client_certificate_types: PrefixedList<'a, CertificateType, u8>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
@@ -451,8 +510,8 @@ pub struct ClientCertTypeServerHello {
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct ServerCertTypeClientHello {
-    server_certificate_types: PrefixedList<CertificateType, u8>,
+pub struct ServerCertTypeClientHello<'a> {
+    server_certificate_types: PrefixedList<'a, CertificateType, u8>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc7250#section-3
@@ -462,67 +521,60 @@ pub struct ServerCertTypeServerHello {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-struct DistinguishedName {
-    name: PrefixedBlob<u16>,
+struct DistinguishedName<'a> {
+    name: PrefixedBlob<'a, u16>,
 }
 
 /// Defined in https://www.rfc-editor.org/rfc/rfc8446#section-4.2.4
 #[derive(Clone, Debug, PartialEq, Eq, DecodeStruct, EncodeStruct)]
-pub struct CertificateAuthorities {
-    authorities: PrefixedList<DistinguishedName, u16>,
+pub struct CertificateAuthorities<'a> {
+    authorities: PrefixedList<'a, DistinguishedName<'a>, u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ClientHelloExtensionData {
-    PreSharedKey(PresharedKeyClientHello),
-    SignatureScheme(SignatureSchemeList),
-    SignatureSchemeCert(SignatureSchemeList),
-    ServerName(ServerNameClientHello),
-    SupportedVersions(SupportedVersionClientHello),
-    SupportedGroups(SupportedGroups),
-    KeyShare(KeyShareClientHello),
-    EcPointFormat(EcPointFormatList),
+pub enum ClientHelloExtensionData<'a> {
+    PreSharedKey(PresharedKeyClientHello<'a>),
+    SignatureScheme(SignatureSchemeList<'a>),
+    SignatureSchemeCert(SignatureSchemeList<'a>),
+    ServerName(ServerNameClientHello<'a>),
+    SupportedVersions(SupportedVersionClientHello<'a>),
+    SupportedGroups(SupportedGroups<'a>),
+    KeyShare(KeyShareClientHello<'a>),
+    EcPointFormat(EcPointFormatList<'a>),
     ExtendedMasterSecret(ExtendedMasterSecret),
-    RenegotiationInfo(RenegotiationInfo),
+    RenegotiationInfo(RenegotiationInfo<'a>),
     SessionTicket(SessionTicket),
     EarlyData(EarlyDataClientHello),
-    PskKeyExchangeModes(PskKeyExchangeModes),
+    PskKeyExchangeModes(PskKeyExchangeModes<'a>),
     RecordSizeLimit(RecordSizeLimit),
     MaxFragmentLength(MaxFragmentLength),
-    Cookie(Cookie),
-    ServerCertificateType(ServerCertTypeClientHello),
-    ClientCertificateType(ClientCertTypeClientHello),
-    CertificateAuthorities(CertificateAuthorities),
+    Cookie(Cookie<'a>),
+    ServerCertificateType(ServerCertTypeClientHello<'a>),
+    ClientCertificateType(ClientCertTypeClientHello<'a>),
+    CertificateAuthorities(CertificateAuthorities<'a>),
     Padding(Padding),
     EncryptThenMac(EncryptThenMac),
-    StatusRequest(CertificateStatus),
+    StatusRequest(CertificateStatus<'a>),
     SignedCertificateTimestamp(SignedCertificateTimestampClientHello),
     Heartbeat(HeatbeatMode),
-    ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation),
+    ApplicationLayerProtocolNegotiation(ApplicationLayerProtocolNegotiation<'a>),
     PostHandshakeAuth(PostHandshakeAuth),
-    UseSrtp(UseSrtpClientHello),
+    UseSrtp(UseSrtpClientHello<'a>),
     Unknown(Vec<u8>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ClientHelloExtension {
+pub struct ClientHelloExtension<'a> {
     pub extension_type: ExtensionType,
-    pub extension_data: ClientHelloExtensionData,
-}
-
-impl ClientHelloExtension {
-    pub fn raw_extension(&self) -> std::io::Result<Extension> {
-        let buffer = self.encode_to_vec()?;
-        Extension::decode_from_exact(buffer.as_slice())
-    }
+    pub extension_data: ClientHelloExtensionData<'a>,
 }
 
 // dyn DecodeValue, EncodeValue, Debug
 
 // TODO: would be run to look at the truncated hmac extension (who thought that was a good idea 😭)
 
-impl DecodeValue for ClientHelloExtension {
-    fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+impl<'a> DecodeValue<'a> for ClientHelloExtension<'a> {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (extension, buffer) = Extension::decode_from(buffer)?;
         let value = match extension.extension_type {
             ExtensionType::ServerName => {
@@ -663,7 +715,7 @@ impl DecodeValue for ClientHelloExtension {
     }
 }
 
-impl EncodeValue for ClientHelloExtension {
+impl EncodeValue for ClientHelloExtension<'_> {
     fn encode_to(&self, buffer: &mut std::io::Cursor<&mut [u8]>) -> std::io::Result<()> {
         buffer.encode_value(&self.extension_type)?;
         let extension_data = match &self.extension_data {
@@ -705,4 +757,30 @@ impl EncodeValue for ClientHelloExtension {
         buffer.encode_value(&extension_data)?;
         Ok(())
     }
+}
+
+impl ExtensionData for SupportedGroups<'_> {
+    const TYPE: ExtensionType = ExtensionType::SupportedGroups;
+}
+impl ExtensionData for SupportedVersionClientHello<'_> {
+    const TYPE: ExtensionType = ExtensionType::SupportedVersions;
+}
+impl ExtensionData for SignatureSchemeList<'_> {
+    const TYPE: ExtensionType = ExtensionType::SignatureAlgorithms;
+}
+
+// `key_share` has a different body in each message that carries it.
+impl ExtensionData for KeyShareClientHello<'_> {
+    const TYPE: ExtensionType = ExtensionType::KeyShare;
+}
+impl ExtensionData for KeyShareServerHello<'_> {
+    const TYPE: ExtensionType = ExtensionType::KeyShare;
+}
+impl ExtensionData for KeyShareRetryRequest {
+    const TYPE: ExtensionType = ExtensionType::KeyShare;
+}
+
+// `supported_versions` has a different body in a ClientHello and a ServerHello.
+impl ExtensionData for SupportedVersionServerHello {
+    const TYPE: ExtensionType = ExtensionType::SupportedVersions;
 }

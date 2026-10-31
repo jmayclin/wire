@@ -1,27 +1,28 @@
+mod cert;
 mod derivation;
 mod protocol;
 mod transcript;
-mod cert;
 
 use std::task::Poll;
 
 use brass_aphid_wire_messages::{
-    codec::{DecodeByteSource, DecodeValue},
+    codec::{DecodeByteSource, DecodeValue, EncodeValue},
     iana::{self},
-    prefixed_list::{PrefixedBlob, PrefixedList},
     protocol::{
-        content_value::HandshakeMessageValue,
         extensions::{
-            self, ClientHelloExtension, ClientHelloExtensionData,
-            ExtensionType::{self},
-            KeyShareServerHello, SupportedVersionServerHello,
+            ExtensionWriter, KeyShareClientHello, KeyShareClientHelloWriter, KeyShareServerHello,
+            KeyShareWriter, SignatureSchemeList, SignatureSchemeListWriter, SupportedGroups,
+            SupportedGroupsWriter, SupportedVersionClientHello, SupportedVersionClientHelloWriter,
+            SupportedVersionServerHello,
         },
-        HandshakeType, ServerHelloConfusionMode, SigHashOrScheme,
+        handshake::{HandshakeMessage, HandshakeWriter},
+        CertVerifyTls13, CertificateTls13, ClientHello, ClientHelloWriter, EncryptedExtensions,
+        Finished, HandshakeType, ServerHello, SigHashOrScheme,
     },
 };
 use elliptic_curve::{sec1::ToSec1Point, Generate};
 
-use crate::derivation::KeySchedule;
+use crate::{derivation::KeySchedule, transcript::HandshakeTranscript};
 
 // https://www.rfc-editor.org/info/rfc8446/#appendix-A
 
@@ -79,7 +80,7 @@ pub struct Client {
 
     /**********************      State Stuff     ******************************/
     key_schedule: Option<KeySchedule>,
-    transcript: Vec<HandshakeMessageValue>,
+    transcript: HandshakeTranscript,
     needed_action: (Action, HandshakeType),
 
     /*************************    🤫 Secrets 🤫    *****************************/
@@ -90,8 +91,8 @@ pub struct Client {
 }
 
 pub struct ParsedCertificate<'a> {
-    subject: &'a[u8],
-    issue: &'a[u8],
+    subject: &'a [u8],
+    issue: &'a [u8],
     public_key: &'a [u8],
     signature: &'a [u8],
 }
@@ -107,7 +108,7 @@ impl Client {
             server_key_share: None,
             server_cert: None,
             key_schedule: None,
-            transcript: Vec::new(),
+            transcript: HandshakeTranscript::default(),
             needed_action: (Action::Write, HandshakeType::ClientHello),
             server_handshake_secret: None,
             client_handshake_secret: None,
@@ -132,29 +133,30 @@ impl Client {
         self.needed_action.0
     }
 
-    pub fn read_bytes(bytes: &[u8]) -> std::io::Result<(HandshakeMessageValue, &[u8])> {
-        let (_handshake, _remaining) = bytes.decode_value::<HandshakeMessageValue>()?;
+    pub fn read_bytes(bytes: &[u8]) -> std::io::Result<(HandshakeMessage, &[u8])> {
+        let (_handshake, _remaining) = bytes.decode_value::<HandshakeMessage>()?;
 
         todo!()
     }
 
-    pub fn consume_message(&mut self, message: HandshakeMessageValue) -> std::io::Result<()> {
+    pub fn consume_message(&mut self, message: HandshakeMessage) -> std::io::Result<()> {
         // state validation: we are reading/writing the correct message
         {
-            let this_action = (Action::Read, message.handshake_type());
+            let this_action = (Action::Read, message.handshake_type);
             assert_eq!(this_action, self.needed_action);
         }
 
-        self.transcript.push(message.clone());
+        self.transcript.add_message(&message);
 
         // message processing
-        match message {
-            HandshakeMessageValue::ServerHelloConfusion(ServerHelloConfusionMode::ServerHello(
-                sh,
-            )) => {
+        match message.handshake_type.clone() {
+            HandshakeType::ServerHello => {
+                let sh = message.parse::<ServerHello>()?;
+                assert!(!sh.is_hrr());
+
                 let selected_cipher = sh.cipher_suite;
                 let selected_version = sh.selected_version();
-                let key_share = sh.key_share().unwrap();
+                let key_share = sh.key_share()?.unwrap();
 
                 // the UncompressedPointRepresentation is a specific SEC1 encoding
                 let public_key =
@@ -185,26 +187,30 @@ impl Client {
 
                 self.key_schedule = Some(key_schedule)
             }
-            HandshakeMessageValue::ServerHelloConfusion(
-                ServerHelloConfusionMode::HelloRetryRequest(_sh),
-            ) => {
-                panic!("i don't support hrr yet bc im lazy")
-            }
-            HandshakeMessageValue::EncryptedExtensions(ee) => {
+            HandshakeType::EncryptedExtensions => {
+                let ee = message.parse::<EncryptedExtensions>()?;
                 println!("ee: {ee:?}");
             }
-            HandshakeMessageValue::CertificateTls13(certificate_tls13) => {
-                println!("cert tls13: {certificate_tls13:?}");
+            HandshakeType::Certificate => {
+                let cert = message.parse::<CertificateTls13>()?;
+                println!("cert tls13: {cert:?}");
                 // perform certificate validation: the cert was issue by a trusted CA
-                let certs = certificate_tls13.certificate_list.list();
-                let parsed_certs = certs.iter().map(|cert| cert.cert_data.blob());
+                let parsed_certs = cert
+                    .certificate_list
+                    .iter()
+                    .map(|cert| cert.cert_data.blob());
             }
-            HandshakeMessageValue::CertVerifyTls13(cert_verify_tls13) => {
-                println!("cert verify: {cert_verify_tls13:?}");
-                let negotiated_signature = cert_verify_tls13.algorithm;
+            HandshakeType::CertificateVerify => {
+                let verify = message.parse::<CertVerifyTls13>()?;
+                println!("cert verify: {verify:?}");
+                let negotiated_signature = verify.algorithm;
             }
-            HandshakeMessageValue::NewSessionTicketTls13(_new_session_ticket_tls13) => todo!(),
-            HandshakeMessageValue::Finished(finished) => {
+            HandshakeType::NewSessionTicket => todo!(),
+            HandshakeType::Finished => {
+                // Safety: this should be safe, because we only get to this state
+                let message: Finished = message
+                    .body
+                    .decode_value_context_exact(self.negotiated_cipher.unwrap())?;
                 let key_schedule = self.key_schedule.as_mut().unwrap();
                 key_schedule.to_master_secret();
                 self.client_application_secret =
@@ -220,81 +226,79 @@ impl Client {
         Ok(())
     }
 
-    pub fn make_message(&mut self) -> std::io::Result<HandshakeMessageValue> {
+    /// Build the ClientHello, returning it as a framed handshake message (type,
+    /// u24 length, body).
+    ///
+    /// Every field of the hello is a borrow of something on this stack frame,
+    /// and nothing is allocated except the final `Vec<u8>`.
+    fn client_hello(&mut self) -> std::io::Result<Vec<u8>> {
+        // generate key share information
+        let key = p256::SecretKey::generate();
+        let public_key = key.public_key().to_uncompressed_point();
+        let public_key_ref = public_key.as_slice();
+        let key_share = [KeyShareWriter {
+            group: iana::constants::secp256r1,
+            key_exchange: public_key_ref,
+        }];
+        let key_share = KeyShareClientHelloWriter {
+            client_shares: key_share.as_slice(),
+        };
+
+        // supported parameters
+        let supported_groups = SupportedGroupsWriter {
+            named_curve_list: [iana::constants::secp256r1].as_slice(),
+        };
+        let supported_versions = SupportedVersionClientHelloWriter {
+            versions: [iana::Protocol::TLSv1_3].as_slice(),
+        };
+        let signature_algorithms = SignatureSchemeListWriter {
+            supported_signature_algorithms: &*[
+                SigHashOrScheme::SignatureScheme(iana::constants::ecdsa_secp256r1_sha256),
+                SigHashOrScheme::SignatureScheme(iana::constants::rsa_pss_rsae_sha256),
+            ]
+            .as_slice(),
+        };
+        let supported_ciphers = [iana::constants::TLS_AES_256_GCM_SHA384];
+
+        // package extensions
+        let extensions = [
+            ExtensionWriter::of::<SupportedGroups>(&supported_groups),
+            ExtensionWriter::of::<SupportedVersionClientHello>(&supported_versions),
+            ExtensionWriter::of::<SignatureSchemeList>(&signature_algorithms),
+            ExtensionWriter::of::<KeyShareClientHello>(&key_share),
+        ];
+
+        // assemble the client hello
+        let client_hello = ClientHelloWriter {
+            protocol_version: iana::Protocol::TLSv1_2,
+            random: *b"https://xkcd.com/221/-----------",
+            session_id: [].as_slice(),
+            offered_ciphers: supported_ciphers.as_slice(),
+            compression_methods: [].as_slice(),
+            extensions: Some(extensions.as_slice()),
+        };
+
+        let message = HandshakeWriter::of::<ClientHello>(&client_hello);
+        let message = message.encode_to_vec()?;
+
+        self.client_key_share = Some(key);
+        Ok(message)
+    }
+
+    pub fn make_message(&mut self) -> std::io::Result<Vec<u8>> {
         let (action, message) = self.needed_action.clone();
         assert_eq!(action, Action::Write);
         let message = match message {
-            HandshakeType::ClientHello => {
-                let supported_version = extensions::SupportedVersionClientHello {
-                    versions: PrefixedList::new(vec![iana::Protocol::TLSv1_3]),
-                };
-                let signature_algorithms = extensions::SignatureSchemeList {
-                    supported_signature_algorithms: PrefixedList::new(vec![
-                        SigHashOrScheme::SignatureScheme(iana::constants::ecdsa_secp256r1_sha256),
-                        SigHashOrScheme::SignatureScheme(iana::constants::rsa_pss_rsae_sha256),
-                    ]),
-                };
-                let supported_groups = extensions::SupportedGroups {
-                    named_curve_list: PrefixedList::new(vec![iana::constants::secp256r1]),
-                };
-                let key = p256::SecretKey::generate();
-
-                let key_share = {
-                    let pub_key = key.public_key();
-
-                    let key_share = extensions::KeyShare {
-                        group: iana::constants::secp256r1,
-                        key_exchange: PrefixedBlob::new(pub_key.to_uncompressed_point().to_vec()),
-                    };
-                    extensions::KeyShareClientHello {
-                        client_shares: PrefixedList::new(vec![key_share]),
-                    }
-                };
-
-                let client_hello_extensions = vec![
-                    ClientHelloExtension {
-                        extension_type: ExtensionType::SupportedGroups,
-                        extension_data: ClientHelloExtensionData::SupportedGroups(supported_groups),
-                    },
-                    ClientHelloExtension {
-                        extension_type: ExtensionType::SupportedVersions,
-                        extension_data: ClientHelloExtensionData::SupportedVersions(
-                            supported_version,
-                        ),
-                    },
-                    ClientHelloExtension {
-                        extension_type: ExtensionType::SignatureAlgorithms,
-                        extension_data: ClientHelloExtensionData::SignatureScheme(
-                            signature_algorithms,
-                        ),
-                    },
-                    ClientHelloExtension {
-                        extension_type: ExtensionType::KeyShare,
-                        extension_data: ClientHelloExtensionData::KeyShare(key_share),
-                    },
-                ];
-
-                let client_hello = brass_aphid_wire_messages::protocol::messages::ClientHello {
-                    protocol_version: iana::Protocol::TLSv1_2,
-                    random: *b"https://xkcd.com/221/-----------",
-                    session_id: PrefixedBlob::new(Vec::new()),
-                    offered_ciphers: PrefixedList::new(vec![
-                        iana::constants::TLS_AES_256_GCM_SHA384,
-                    ]),
-                    compression_methods: PrefixedBlob::new(Vec::new()),
-                    extensions: Some(PrefixedList::new(client_hello_extensions)),
-                };
-
-                self.client_key_share = Some(key);
-                HandshakeMessageValue::ClientHello(client_hello)
-            }
+            HandshakeType::ClientHello => self.client_hello()?,
             HandshakeType::Finished => todo!(),
             other => {
                 panic!("not expecting to write {other:?}")
             }
         };
         self.increment_state();
-        self.transcript.push(message.clone());
+        // TODO: unhack this
+        let parsed_message = HandshakeMessage::decode_from_exact(&message)?;
+        self.transcript.add_message(&parsed_message);
         Ok(message)
     }
 
@@ -371,9 +375,7 @@ struct Server;
 
 struct HandshakeState {}
 
-impl HandshakeState {
-    fn process_message(_message: &HandshakeMessageValue) {}
-}
+
 
 #[cfg(test)]
 mod tests {

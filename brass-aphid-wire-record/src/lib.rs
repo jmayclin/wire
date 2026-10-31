@@ -46,7 +46,7 @@ use std::io::{Cursor, Write};
 pub use tls13::Tls13;
 
 use brass_aphid_wire_messages::{
-    codec::{DecodeByteSource, DecodeValue, EncodeBytesSink},
+    codec::{DecodeByteSource, EncodeBytesSink},
     iana::{self, Protocol},
     protocol::{ContentType, RecordHeader},
 };
@@ -58,10 +58,10 @@ pub struct Record<T> {
 
 /// we unfortunately implement DecodeValue here, because the generic is in the
 /// wrong place
-impl<T: DecodeByteSource> Record<T> {
-    fn decode_from(buffer: T) -> std::io::Result<(Self, T)> {
+impl<'a> Record<&'a [u8]> {
+    fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
         let (header, remaining) = buffer.decode_value::<RecordHeader>()?;
-        let (payload, remaining) = remaining.pull(header.record_length.into())?;
+        let (payload, remaining) = brass_aphid_wire_messages::codec::take(remaining, header.record_length.into())?;
         let value = Self { header, payload };
         Ok((value, remaining))
     }

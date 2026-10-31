@@ -1,12 +1,11 @@
-use ::ecdsa::SignatureEncoding;
 use brass_aphid_wire_messages::{
-    codec::EncodeValue, iana::HashAlgorithm, prefixed_list::PrefixedBlob, protocol::{HandshakeType, content_value::HandshakeMessageValue},
+    codec::EncodeValue, iana::HashAlgorithm, prefixed_list::PrefixedBlobWriter, protocol::{HandshakeType},
 };
 use hkdf::{GenericHkdf, Hkdf, HmacImpl};
 use hmac::SimpleHmac;
-use sha2::{Digest, Sha256, Sha384};
+use sha2::{Sha256, Sha384};
 
-use crate::transcript;
+use crate::transcript::HandshakeTranscript;
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -35,13 +34,11 @@ where
     let hkdf_label = {
         let length = u16::to_be_bytes(length).as_slice().to_vec();
 
-        // TODO: make PrefixedBlob zero-copy
-        let label: PrefixedBlob<u8> = PrefixedBlob::new([b"tls13 ", label].concat());
-        let context: PrefixedBlob<u8> = PrefixedBlob::new(context.to_vec());
+        let label = [b"tls13 ".as_slice(), label].concat();
         [
             length,
-            label.encode_to_vec().unwrap(),
-            context.encode_to_vec().unwrap(),
+            PrefixedBlobWriter::<u8>::new(&label).encode_to_vec().unwrap(),
+            PrefixedBlobWriter::<u8>::new(context).encode_to_vec().unwrap(),
         ]
         .concat()
     };
@@ -121,28 +118,21 @@ impl KeySchedule {
     ///   Derive-Secret(Secret, Label, Messages) =
     ///        HKDF-Expand-Label(Secret, Label,
     ///                          Transcript-Hash(Messages), Hash.length)
-    fn derive_secret(&self, secret: &[u8], label: &[u8], messages: &[HandshakeMessageValue]) -> Vec<u8> {
-        let transcript_hash = match self.hash {
-            HashAlgorithm::Sha256 => transcript::transcript_hash::<Sha256>(messages),
-            HashAlgorithm::Sha384 => transcript::transcript_hash::<Sha384>(messages),
-            _ => panic!("should be unreachable, idk")
-        };
-
+    fn derive_secret(
+        &self,
+        secret: &[u8],
+        label: &[u8],
+        transcript: &HandshakeTranscript,
+    ) -> Vec<u8> {
+        let length = self.hash.digest_size() as u16;
         match self.hash {
-            HashAlgorithm::Sha256 => hkdf_expand_label::<Sha256>(
-                secret,
-                label,
-                &transcript_hash,
-                self.hash.digest_size() as u16,
-            ),
-            HashAlgorithm::Sha384 => hkdf_expand_label::<Sha384>(
-                secret,
-                label,
-                &transcript_hash,
-                self.hash.digest_size() as u16,
-            ),
-            _ => panic!("should be unreachable, idk")
-
+            HashAlgorithm::Sha256 => {
+                hkdf_expand_label::<Sha256>(secret, label, &transcript.sha256(), length)
+            }
+            HashAlgorithm::Sha384 => {
+                hkdf_expand_label::<Sha384>(secret, label, &transcript.sha384(), length)
+            }
+            _ => panic!("should be unreachable, idk"),
         }
     }
 
@@ -182,7 +172,13 @@ impl KeySchedule {
     pub fn to_handshake_secret(&mut self, shared_secret: &[u8]) {
         debug_assert_eq!(self.state, KeyScheduleState::EarlySecret);
 
-        self.secret = Self::derive_secret(&self, &self.secret, b"derived", &[]);
+        // Derive-Secret(., "derived", "") hashes the empty string
+        self.secret = Self::derive_secret(
+            &self,
+            &self.secret,
+            b"derived",
+            &HandshakeTranscript::default(),
+        );
 
         self.secret = Self::hkdf_extract(&self, &shared_secret, &self.secret);
 
@@ -193,18 +189,18 @@ impl KeySchedule {
     /////////////////            Handshake Secret          /////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    pub fn client_handshake_traffic_secret(&self, transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    pub fn client_handshake_traffic_secret(&self, transcript: &HandshakeTranscript) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::HandshakeSecret);
-        debug_assert_eq!(transcript.first().unwrap().handshake_type(), HandshakeType::ClientHello);
-        debug_assert_eq!(transcript.last().unwrap().handshake_type(), HandshakeType::ServerHello);
+        debug_assert_eq!(*transcript.hashed_messages.first().unwrap(), HandshakeType::ClientHello);
+        debug_assert_eq!(*transcript.hashed_messages.last().unwrap(), HandshakeType::ServerHello);
 
         self.derive_secret(&self.secret, b"c hs traffic", transcript)
     }
 
-    pub fn server_handshake_traffic_secret(&self, transcript: &[HandshakeMessageValue]) -> Vec<u8> {
+    pub fn server_handshake_traffic_secret(&self, transcript: &HandshakeTranscript) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::HandshakeSecret);
-        debug_assert_eq!(transcript.first().unwrap().handshake_type(), HandshakeType::ClientHello);
-        debug_assert_eq!(transcript.last().unwrap().handshake_type(), HandshakeType::ServerHello);
+        debug_assert_eq!(*transcript.hashed_messages.first().unwrap(), HandshakeType::ClientHello);
+        debug_assert_eq!(*transcript.hashed_messages.last().unwrap(), HandshakeType::ServerHello);
 
         self.derive_secret(&self.secret, b"s hs traffic", transcript)
     }
@@ -212,7 +208,13 @@ impl KeySchedule {
     pub fn to_master_secret(&mut self) {
         debug_assert_eq!(self.state, KeyScheduleState::HandshakeSecret);
 
-        self.secret = Self::derive_secret(&self, &self.secret, b"derived", &[]);
+        // Derive-Secret(., "derived", "") hashes the empty string
+        self.secret = Self::derive_secret(
+            &self,
+            &self.secret,
+            b"derived",
+            &HandshakeTranscript::default(),
+        );
 
         let zero = vec![0; self.hash.digest_size()];
         self.secret = Self::hkdf_extract(&self, &zero, &self.secret);
@@ -224,27 +226,21 @@ impl KeySchedule {
     ///////////////////            Master Secret          //////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
-    pub fn client_application_traffic_secret_0(
-        &self,
-        transcript: &[HandshakeMessageValue],
-    ) -> Vec<u8> {
+    pub fn client_application_traffic_secret_0(&self, transcript: &HandshakeTranscript) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         // to server finished
-        debug_assert_eq!(transcript.first().unwrap().handshake_type(), HandshakeType::ClientHello);
-        debug_assert_eq!(transcript.last().unwrap().handshake_type(), HandshakeType::Finished);
-        
+        debug_assert_eq!(*transcript.hashed_messages.first().unwrap(), HandshakeType::ClientHello);
+        debug_assert_eq!(*transcript.hashed_messages.last().unwrap(), HandshakeType::Finished);
+
         self.derive_secret(&self.secret, b"c ap traffic", transcript)
     }
 
-    pub fn server_application_traffic_secret_0(
-        &self,
-        transcript: &[HandshakeMessageValue],
-    ) -> Vec<u8> {
+    pub fn server_application_traffic_secret_0(&self, transcript: &HandshakeTranscript) -> Vec<u8> {
         debug_assert_eq!(self.state, KeyScheduleState::MasterSecret);
         // to server finished
-        debug_assert_eq!(transcript.first().unwrap().handshake_type(), HandshakeType::ClientHello);
-        debug_assert_eq!(transcript.last().unwrap().handshake_type(), HandshakeType::Finished);
-        
+        debug_assert_eq!(*transcript.hashed_messages.first().unwrap(), HandshakeType::ClientHello);
+        debug_assert_eq!(*transcript.hashed_messages.last().unwrap(), HandshakeType::Finished);
+
         self.derive_secret(&self.secret, b"s ap traffic", transcript)
     }
 }

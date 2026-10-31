@@ -27,9 +27,12 @@ use std::{
 };
 
 use brass_aphid_wire_messages::{
-    codec::{DecodeByteSource, DecodeValue, DecodeValueWithContext},
+    codec::{DecodeByteSource, DecodeValue},
     iana,
-    protocol::{content_value::HandshakeMessageValue, ContentType, HandshakeType},
+    protocol::{
+        handshake::HandshakeMessage, ContentType, EncryptedExtensions, Finished, HandshakeType,
+        ServerHello,
+    },
 };
 use brass_aphid_wire_record::{Payload, Plaintext, RecordProtocol, RecordProtocolBehavior};
 use openssl::ssl::{ErrorCode, Ssl, SslContext, SslFiletype, SslMethod, SslVerifyMode, SslVersion};
@@ -450,8 +453,8 @@ fn tls13_decryption() -> std::io::Result<()> {
             assert!(remaining.is_empty());
 
             let payload = payload.assert_handshake();
-            let hs = payload.decode_value_exact::<HandshakeMessageValue>()?;
-            assert_eq!(hs.handshake_type(), HandshakeType::ClientHello);
+            let hs = payload.decode_value_exact::<HandshakeMessage>()?;
+            assert_eq!(hs.handshake_type, HandshakeType::ClientHello);
         }
         cursor.set_position(0);
 
@@ -462,8 +465,9 @@ fn tls13_decryption() -> std::io::Result<()> {
             let (mut payload, remaining) =
                 server_tx.decapsulate_bytes(&server_hello, &mut cursor)?;
             let payload = payload.assert_handshake();
-            let hs = HandshakeMessageValue::decode_from_exact(payload)?;
-            assert_eq!(hs.handshake_type(), HandshakeType::ServerHello);
+            let hs = HandshakeMessage::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type, HandshakeType::ServerHello);
+            hs.parse::<ServerHello>()?;
 
             // plaintext record: CCS
             let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
@@ -481,35 +485,30 @@ fn tls13_decryption() -> std::io::Result<()> {
             // Encrypted Record: EncryptedExtensions
             let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
             let payload = payload.assert_handshake();
-            let hs = HandshakeMessageValue::decode_from_exact(payload)?;
-            assert_eq!(hs.handshake_type(), HandshakeType::EncryptedExtensions);
+            let hs = HandshakeMessage::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type, HandshakeType::EncryptedExtensions);
+            hs.parse::<EncryptedExtensions>()?;
 
             // Encrypted Record: Certificate
             let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
             let payload = payload.assert_handshake();
-            let hs = HandshakeMessageValue::decode_from_with_context_exact(
-                payload,
-                (iana::Protocol::TLSv1_3, cipher),
-            )?;
-            assert_eq!(hs.handshake_type(), HandshakeType::Certificate);
+            let hs = HandshakeMessage::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type, HandshakeType::Certificate);
 
             // Encrypted Record: Certificate Verify
             let (mut payload, remaining) = server_tx.decapsulate_bytes(remaining, &mut cursor)?;
             let payload = payload.assert_handshake();
-            let hs = HandshakeMessageValue::decode_from_exact(payload)
-                .unwrap()
-                .handshake_type();
+            let hs = HandshakeMessage::decode_from_exact(payload)?.handshake_type;
             assert_eq!(hs, HandshakeType::CertificateVerify);
 
             // Encrypted Record: Finished
             let (mut payload, _remaining) =
                 server_tx.decapsulate_bytes(remaining, &mut cursor).unwrap();
             let payload = payload.assert_handshake();
-            let hs = HandshakeMessageValue::decode_from_with_context_exact(
-                payload,
-                (iana::Protocol::TLSv1_3, cipher),
-            )?;
-            assert_eq!(hs.handshake_type(), HandshakeType::Finished);
+            let hs = HandshakeMessage::decode_from_exact(payload)?;
+            assert_eq!(hs.handshake_type, HandshakeType::Finished);
+            // the verify_data has no length prefix: its length is the cipher's hash size
+            hs.parse_with_context::<Finished>(cipher)?;
 
             // let client_responses = conversation.next_client_tx();
         }

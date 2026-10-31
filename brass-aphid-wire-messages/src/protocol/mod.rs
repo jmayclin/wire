@@ -1,10 +1,9 @@
-pub mod content_value;
 pub mod extensions;
+pub mod handshake;
 pub mod messages;
 
 use crate::{
-    codec::{DecodeByteSource, DecodeValue, EncodeValue},
-    discriminant::impl_byte_value,
+    codec::{DecodeValue, EncodeValue}, discriminant::impl_byte_value, protocol::HandshakeType::Unknown,
 };
 use brass_aphid_wire_macros::{DecodeEnum, EncodeEnum};
 pub use messages::*;
@@ -28,7 +27,7 @@ impl_byte_value!(ContentType, u8);
 /// The message contained in Handshake content.
 ///
 /// https://www.iana.org/assignments/tls-parameters/tls-parameters.xhtml#tls-parameters-7
-#[derive(Debug, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, strum::EnumIter, EncodeEnum, DecodeEnum)]
 #[repr(u8)]
 pub enum HandshakeType {
     HelloRequest = 0,
@@ -50,6 +49,12 @@ pub enum HandshakeType {
     Unknown(u8),
 }
 impl_byte_value!(HandshakeType, u8);
+
+impl Default for HandshakeType {
+    fn default() -> Self {
+        Unknown(0)
+    }
+}
 
 /// AlertLevel is a field on Alert
 /// [RFC reference](https://www.rfc-editor.org/rfc/rfc8446#section-6)

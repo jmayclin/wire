@@ -3,7 +3,9 @@ use crate::{
     iana::{self, HashAlgorithm, Protocol, SignatureAlgorithm},
     protocol::{
         extensions::{
-            ClientHelloExtensionData, EcPointFormat, ExtendedMasterSecret, ExtensionType,
+            EcPointFormat, EcPointFormatList, ExtendedMasterSecret, ExtensionType,
+            KeyShareClientHello, ServerNameClientHello, SignatureSchemeList, SupportedGroups,
+            SupportedVersionClientHello,
         },
         server_key_exchange::{ECCurveType, EcCurveValue},
         CertificateTls12ish, ChangeCipherSpec, ClientHello, ContentType, HandshakeMessageHeader,
@@ -130,7 +132,7 @@ fn tls13() -> std::io::Result<()> {
         assert_eq!(client_hello.protocol_version, Protocol::TLSv1_2);
         assert_eq!(client_hello.session_id.blob().len(), 32);
         assert_eq!(
-            client_hello.offered_ciphers.list(),
+            client_hello.offered_ciphers.iter().collect::<Vec<_>>(),
             &[
                 iana::constants::TLS_AES_128_GCM_SHA256,
                 iana::constants::TLS_AES_256_GCM_SHA384,
@@ -149,27 +151,24 @@ fn tls13() -> std::io::Result<()> {
             ]
         );
         assert_eq!(client_hello.compression_methods.blob().len(), 1);
-        let mut extensions = client_hello.extensions.unwrap().list().to_vec();
-        let mut extensions = extensions.drain(..);
+        let mut extensions = client_hello.extensions.unwrap().iter();
 
         // extension: supported versions
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::SupportedVersions);
-            if let ClientHelloExtensionData::SupportedVersions(s) = ext.extension_data {
-                assert_eq!(s.versions.list(), &[Protocol::TLSv1_3, Protocol::TLSv1_2]);
-            } else {
-                panic!("unexpected enum");
-            }
+            let s = SupportedVersionClientHello::decode_from_exact(ext.extension_data.blob())?;
+                assert_eq!(s.versions.iter().collect::<Vec<_>>(), &[Protocol::TLSv1_3, Protocol::TLSv1_2]);
+            
         }
 
         // extension: supported groups
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::SupportedGroups);
-            if let ClientHelloExtensionData::SupportedGroups(s) = ext.extension_data {
+            let s = SupportedGroups::decode_from_exact(ext.extension_data.blob())?;
                 assert_eq!(
-                    s.named_curve_list.list(),
+                    s.named_curve_list.iter().collect::<Vec<_>>(),
                     &[
                         iana::constants::secp256r1,
                         iana::constants::x25519,
@@ -177,35 +176,31 @@ fn tls13() -> std::io::Result<()> {
                         iana::constants::secp521r1,
                     ]
                 );
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
 
         // extension: key share
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::KeyShare);
-            if let ClientHelloExtensionData::KeyShare(s) = ext.extension_data {
+            let s = KeyShareClientHello::decode_from_exact(ext.extension_data.blob())?;
                 let shares: Vec<iana::Group> = s
                     .client_shares
-                    .list()
+                    .iter().collect::<Vec<_>>()
                     .iter()
                     .map(|share| share.group)
                     .collect();
                 assert_eq!(shares, vec![iana::constants::secp256r1]);
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
 
         // extension: signature algorithm
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::SignatureAlgorithms);
-            if let ClientHelloExtensionData::SignatureScheme(s) = ext.extension_data {
+            let s = SignatureSchemeList::decode_from_exact(ext.extension_data.blob())?;
                 assert_eq!(
-                    s.supported_signature_algorithms.list(),
+                    s.supported_signature_algorithms.iter().collect::<Vec<_>>(),
                     &[
                         SigHashOrScheme::SignatureHash(SignatureAndHashAlgorithm {
                             hash: HashAlgorithm::Sha256,
@@ -239,50 +234,42 @@ fn tls13() -> std::io::Result<()> {
                         })
                     ]
                 );
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
 
         // extension: server name
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::ServerName);
-            if let ClientHelloExtensionData::ServerName(s) = ext.extension_data {
-                let list = s.server_name_list.list();
+            let s = ServerNameClientHello::decode_from_exact(ext.extension_data.blob())?;
+                let list = s.server_name_list.iter().collect::<Vec<_>>();
                 assert_eq!(list.len(), 1);
                 assert_eq!(
                     String::from_utf8(list[0].host_name.blob().to_vec()).unwrap(),
                     "localhost".to_string()
                 );
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
 
         // extension: ec point formats
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::EcPointFormats);
-            if let ClientHelloExtensionData::EcPointFormat(s) = ext.extension_data {
+            let s = EcPointFormatList::decode_from_exact(ext.extension_data.blob())?;
                 assert_eq!(
-                    s.ec_point_format_list.list(),
+                    s.ec_point_format_list.iter().collect::<Vec<_>>(),
                     &[EcPointFormat::Uncompressed]
                 );
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
 
         // extension: extended master secret
         {
             let ext = extensions.next().unwrap();
             assert_eq!(ext.extension_type, ExtensionType::ExtendedMasterSecret);
-            if let ClientHelloExtensionData::ExtendedMasterSecret(s) = ext.extension_data {
+            let s = ExtendedMasterSecret::decode_from_exact(ext.extension_data.blob())?;
                 assert_eq!(s, ExtendedMasterSecret {});
-            } else {
-                panic!("unexpected enum");
-            }
+            
         }
     }
 

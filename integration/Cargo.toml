@@ -16,4 +16,4 @@ brass-aphid-wire-macros = { version = "0.0.5", path = "../brass-aphid-wire-macro
 brass-aphid-wire-messages = { version = "0.0.6", path = "../brass-aphid-wire-messages" }
 brass-aphid-wire-record = { version = "0.0.3", path = "../brass-aphid-wire-record" }
 brass-aphid-wire-handshake = { version = "0.0.3", path = "../brass-aphid-wire-handshake" }
-brass-aphid-wire-decryption = { version = "0.0.4", path = "../brass-aphid-wire-decryption" }
+# brass-aphid-wire-decryption = { version = "0.0.4", path = "../brass-aphid-wire-decryption" }
