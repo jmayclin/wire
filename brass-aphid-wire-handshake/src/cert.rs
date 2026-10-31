@@ -99,7 +99,7 @@ mod der_codec {
     const TAG_OID: u8 = 0x06;
     const TAG_BIT_STRING: u8 = 0x03;
     const TAG_CONTEXT_0: u8 = 0xa0; // [0] EXPLICIT (certificate version)
-    // X.520 DirectoryString types (RFC 5280 §4.1.2.4)
+                                    // X.520 DirectoryString types (RFC 5280 §4.1.2.4)
     /// Full Unicode via UTF-8. The modern default for new certificates.
     const TAG_UTF8_STRING: u8 = 0x0c;
     /// Restricted to A-Z, a-z, 0-9, space, and ' ( ) + , - . / : = ?
@@ -177,10 +177,9 @@ mod der_codec {
         }
     }
 
-    impl DecodeValue for DerLength {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for DerLength {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             let first = *buffer
-                .freeze()
                 .first()
                 .ok_or_else(|| invariant("no bytes remain while decoding DER length"))?;
             let encoding = DerLengthEncoding::from_first_byte(first);
@@ -200,8 +199,8 @@ mod der_codec {
                         (size, buffer)
                     };
                     let (length, buffer) = {
-                        let (len_bytes, buffer) = buffer.pull(length_encoding_size)?;
-                        let raw = len_bytes.freeze();
+                        let (raw, buffer) =
+                            brass_aphid_wire_messages::codec::take(buffer, length_encoding_size)?;
                         let mut buf = [0u8; size_of::<usize>()];
                         let start = size_of::<usize>()
                             .checked_sub(raw.len())
@@ -241,8 +240,8 @@ mod der_codec {
         content: Vec<u8>,
     }
 
-    impl DecodeValue for Tlv {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for Tlv {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             let (tag, buffer) = buffer.decode_value::<u8>()?;
             const MULTI_BYTE_TAG_MASK: u8 = 0x1F;
             // X.509 certificates only use single-byte tags. Multi-byte tags
@@ -251,11 +250,11 @@ mod der_codec {
                 return Err(invariant("multi-byte tags not supported"));
             }
             let (DerLength(len), buffer) = buffer.decode_value::<DerLength>()?;
-            let (content, buffer) = buffer.pull(len)?;
+            let (content, buffer) = brass_aphid_wire_messages::codec::take(buffer, len)?;
             Ok((
                 Tlv {
                     tag,
-                    content: content.freeze().to_vec(),
+                    content: content.to_vec(),
                 },
                 buffer,
             ))
@@ -274,8 +273,8 @@ mod der_codec {
                 pub content: Vec<u8>,
             }
 
-            impl DecodeValue for $name {
-                fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+            impl<'a> DecodeValue<'a> for $name {
+                fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
                     let (tlv, buffer) = buffer.decode_value::<Tlv>()?;
                     if tlv.tag != $tag {
                         return Err(invariant(concat!("expected ", stringify!($name))));
@@ -306,8 +305,8 @@ mod der_codec {
         pub content: Vec<u8>,
     }
 
-    impl DecodeValue for DerBitString {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for DerBitString {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             let (tlv, buffer) = buffer.decode_value::<Tlv>()?;
             if tlv.tag != TAG_BIT_STRING {
                 return Err(invariant("expected DerBitString"));
@@ -333,8 +332,8 @@ mod der_codec {
         pub content: String,
     }
 
-    impl DecodeValue for DerUtf8ishString {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for DerUtf8ishString {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             let (tlv, buffer) = buffer.decode_value::<Tlv>()?;
             match tlv.tag {
                 // PrintableString and IA5String are subsets of UTF-8
@@ -349,7 +348,7 @@ mod der_codec {
     }
 
     /// Helper: decode an OID and return the raw content bytes.
-    fn decode_oid<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Vec<u8>, S)> {
+    fn decode_oid(buffer: &[u8]) -> std::io::Result<(Vec<u8>, &[u8])> {
         let (oid, buffer) = buffer.decode_value::<DerOid>()?;
         Ok((oid.content, buffer))
     }
@@ -360,8 +359,8 @@ mod der_codec {
         modulus: Vec<u8>,
     }
 
-    impl DecodeValue for RsaPublicKey {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for RsaPublicKey {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             // BIT STRING wrapper
             let (bits, buffer) = buffer.decode_value::<DerBitString>()?;
             if bits.unused_bits != 0 {
@@ -386,8 +385,8 @@ mod der_codec {
     pub struct CertKeyWrapper(pub CertKeyType);
 
     /// Decode a KeyType from the content of a subjectPublicKeyInfo SEQUENCE.
-    impl DecodeValue for CertKeyWrapper {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for CertKeyWrapper {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             // AlgorithmIdentifier SEQUENCE
             let (key_alg, rest) = buffer.decode_value::<DerSequence>()?;
             let (key_oid, key_alg_rest) = decode_oid(key_alg.content.as_slice())?;
@@ -448,8 +447,8 @@ mod der_codec {
         Ok(String::new())
     }
 
-    impl DecodeValue for super::ParsedCertContent {
-        fn decode_from<S: DecodeByteSource>(buffer: S) -> std::io::Result<(Self, S)> {
+    impl<'a> DecodeValue<'a> for super::ParsedCertContent {
+        fn decode_from(buffer: &'a [u8]) -> std::io::Result<(Self, &'a [u8])> {
             // Certificate ::= SEQUENCE { tbs, sigAlg, sig }
             let (cert_seq, outer) = buffer.decode_value::<DerSequence>()?;
 

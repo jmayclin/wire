@@ -2,11 +2,9 @@ use std::io::{BufRead, Cursor, Write};
 
 use aes_gcm::aes::cipher::InOutBuf;
 use aes_gcm::{AeadInOut, Aes128Gcm, Aes256Gcm, KeyInit};
-use brass_aphid_wire_messages::codec::EncodeValue;
 use brass_aphid_wire_messages::{
-    codec::{DecodeByteSource, DecodeValue},
+    codec::DecodeValue,
     iana::{self, Protocol},
-    prefixed_list::PrefixedBlob,
     protocol::{ContentType, RecordHeader},
 };
 
@@ -36,29 +34,29 @@ use crate::{Record, RecordError, RecordProtocolBehavior};
 //             HKDF-Expand-Label(Secret, Label,
 //                               Transcript-Hash(Messages), Hash.length)
 // https://www.rfc-editor.org/rfc/rfc8446#section-7.1
-pub fn hkdf_expand_label<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Vec<u8>
+pub fn hkdf_expand_label<H, const N: usize>(secret: &[u8], label: &[u8], context: &[u8]) -> [u8; N]
 where
     SimpleHmac<H>: HmacImpl,
     H: digest::Digest + EagerHash,
 {
-    let hkdf_label = {
-        let length = u16::to_be_bytes(length).as_slice().to_vec();
+    let length = u16::to_be_bytes(N as u16);
+    let length = length.as_slice();
 
-        // TODO: make PrefixedBlob zero-copy
-        let label: PrefixedBlob<u8> = PrefixedBlob::new([b"tls13 ", label].concat());
-        let context: PrefixedBlob<u8> = PrefixedBlob::new(context.to_vec());
-        [
-            length,
-            label.encode_to_vec().unwrap(),
-            context.encode_to_vec().unwrap(),
-        ]
-        .concat()
-    };
-
-    let mut output = vec![0; length as usize];
+    let mut output = [0; N];
 
     let hkdf = GenericHkdf::<SimpleHmac<H>>::from_prk(secret).unwrap();
-    hkdf.expand(&hkdf_label, &mut output).unwrap();
+    hkdf.expand_multi_info(
+        &[
+            length,
+            &[label.len() as u8 + b"tls13 ".len() as u8],
+            b"tls13 ",
+            label,
+            &[context.len() as u8],
+            context,
+        ],
+        &mut output,
+    )
+    .unwrap();
 
     output
 }
@@ -87,40 +85,52 @@ impl Tls13Cipher {
     const IV_LABEL: &[u8] = b"iv";
 
     const IV_SIZE: usize = 12;
+    const AES_256_KEY_SIZE: usize = 32;
+    const AES_128_KEY_SIZE: usize = 16;
+    const CHACHAPOLY_KEY_SIZE: usize = 32;
 
     fn from_iana(cipher: iana::Cipher, secret: &[u8]) -> Option<Self> {
         match cipher {
             iana::constants::TLS_AES_128_GCM_SHA256 => {
-                let key =
-                    hkdf_expand_label::<Sha256>(secret, Self::KEY_LABEL, b"", cipher.key_len()?);
+                let key = hkdf_expand_label::<Sha256, { Self::AES_128_KEY_SIZE }>(
+                    secret,
+                    Self::KEY_LABEL,
+                    b"",
+                );
                 let iv =
-                    hkdf_expand_label::<Sha256>(secret, Self::IV_LABEL, b"", Self::IV_SIZE as u16);
+                    hkdf_expand_label::<Sha256, { Self::IV_SIZE }>(secret, Self::IV_LABEL, b"");
                 let key = Aes128Gcm::new_from_slice(&key).unwrap();
                 Some(Self::TLS_AES_128_GCM_SHA256 {
                     key,
-                    iv: iv.try_into().unwrap(),
+                    iv: *iv.as_array().unwrap(),
                 })
             }
             iana::constants::TLS_AES_256_GCM_SHA384 => {
-                let key =
-                    hkdf_expand_label::<Sha384>(secret, Self::KEY_LABEL, b"", cipher.key_len()?);
+                let key = hkdf_expand_label::<Sha384, { Self::AES_256_KEY_SIZE }>(
+                    secret,
+                    Self::KEY_LABEL,
+                    b"",
+                );
                 let iv =
-                    hkdf_expand_label::<Sha384>(secret, Self::IV_LABEL, b"", Self::IV_SIZE as u16);
+                    hkdf_expand_label::<Sha384, { Self::IV_SIZE }>(secret, Self::IV_LABEL, b"");
                 let key = Aes256Gcm::new_from_slice(&key).unwrap();
                 Some(Self::TLS_AES_256_GCM_SHA384 {
                     key,
-                    iv: iv.try_into().unwrap(),
+                    iv: *iv.as_array().unwrap(),
                 })
             }
             iana::constants::TLS_CHACHA20_POLY1305_SHA256 => {
-                let key =
-                    hkdf_expand_label::<Sha256>(secret, Self::KEY_LABEL, b"", cipher.key_len()?);
+                let key = hkdf_expand_label::<Sha256, { Self::CHACHAPOLY_KEY_SIZE }>(
+                    secret,
+                    Self::KEY_LABEL,
+                    b"",
+                );
                 let iv =
-                    hkdf_expand_label::<Sha256>(secret, Self::IV_LABEL, b"", Self::IV_SIZE as u16);
+                    hkdf_expand_label::<Sha256, { Self::IV_SIZE }>(secret, Self::IV_LABEL, b"");
                 let key = ChaCha20Poly1305::new_from_slice(&key).unwrap();
                 Some(Self::TLS_CHACHA20_POLY1305_SHA256 {
                     key,
-                    iv: iv.try_into().unwrap(),
+                    iv: *iv.as_array().unwrap(),
                 })
             }
             _ => None,
@@ -171,7 +181,7 @@ impl Tls13Cipher {
         &self,
         ciphertext: &[u8],
         nonce: &[u8; Self::IV_SIZE],
-        aad: &[u8; 5],
+        aad: &[u8; RecordHeader::ENCODE_LENGTH],
         output: &mut Cursor<&mut [u8]>,
     ) {
         assert!(ciphertext.len() > 16);
@@ -237,12 +247,18 @@ pub struct Tls13 {
 impl Tls13 {
     pub fn cipher(&self) -> iana::Cipher {
         match &self.cipher {
-            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key, iv } => iana::constants::TLS_AES_128_GCM_SHA256,
-            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key, iv } => iana::constants::TLS_AES_256_GCM_SHA384,
-            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key, iv } => iana::constants::TLS_CHACHA20_POLY1305_SHA256,
+            Tls13Cipher::TLS_AES_128_GCM_SHA256 { key: _, iv: _ } => {
+                iana::constants::TLS_AES_128_GCM_SHA256
+            }
+            Tls13Cipher::TLS_AES_256_GCM_SHA384 { key: _, iv: _ } => {
+                iana::constants::TLS_AES_256_GCM_SHA384
+            }
+            Tls13Cipher::TLS_CHACHA20_POLY1305_SHA256 { key: _, iv: _ } => {
+                iana::constants::TLS_CHACHA20_POLY1305_SHA256
+            }
         }
     }
-    
+
     pub fn new(cipher: iana::Cipher, secret: &[u8]) -> Self {
         let cipher = Tls13Cipher::from_iana(cipher, secret).unwrap();
         Self {
@@ -289,7 +305,7 @@ impl RecordProtocolBehavior for Tls13 {
             protocol_version: Protocol::TLSv1_2,
             record_length: ciphertext_len as u16,
         };
-        let add = record_header.encode_to_vec().unwrap();
+        let add = record_header.array_encode();
 
         // write the plaintext record header out ahead of the ciphertext. This is
         // also the AEAD additional authenticated data.
@@ -336,8 +352,7 @@ impl RecordProtocolBehavior for Tls13 {
             record.payload.len()
         );
         let nonce = self.calculate_nonce();
-
-        let aad = record.header.encode_to_vec().unwrap();
+        let aad = record.header.array_encode();
 
         // TODO: make this not explode
 

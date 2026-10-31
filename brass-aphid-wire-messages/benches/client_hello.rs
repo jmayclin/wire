@@ -7,6 +7,10 @@
 //! - `resumed_0rtt`: the larger ClientHello from the "Resumed 0-RTT Handshake"
 //!   (§4), which carries a pre_shared_key extension and is therefore a good
 //!   stress case for extension parsing.
+//!
+//! resumed_0rtt - 2.22 µs with the generic decode byte source
+//! resumed_0rtt - 1.56 µs with the concrete &[u8] buffer
+//! resumed_0rtt -   408 ns with the zero alloc parsing
 
 use brass_aphid_wire_messages::{
     codec::DecodeValue,

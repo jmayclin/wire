@@ -4,6 +4,7 @@ pub mod prefixed_list;
 pub mod protocol;
 #[cfg(test)]
 pub mod testing;
+pub mod writer;
 
 mod discriminant {
     macro_rules! impl_byte_value {

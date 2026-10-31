@@ -1,12 +1,48 @@
-use ::ecdsa::SignatureEncoding;
-use brass_aphid_wire_messages::{
-    codec::EncodeValue,
-    prefixed_list::{PrefixedBlob, PrefixedList},
-    protocol::{content_value::HandshakeMessageValue, CertificateEntry, CertificateTls13},
-};
+use brass_aphid_wire_messages::protocol::{handshake::HandshakeMessage, HandshakeType};
 use hkdf::{GenericHkdf, HmacImpl};
-use hmac::SimpleHmac;
+use hmac::{digest::Output, SimpleHmac};
 use sha2::Digest;
+
+const MAX_HANDSHAKE_MESSAGE_COUNT: usize = 16;
+
+/// ```text
+/// 4.4.1.  The Transcript Hash
+///
+///    Many of the cryptographic computations in TLS make use of a
+///    transcript hash.  This value is computed by hashing the concatenation
+///    of each included handshake message, including the handshake message
+///    header carrying the handshake message type and length fields, but not
+///    including record layer headers.  I.e.,
+///
+///     Transcript-Hash(M1, M2, ... Mn) = Hash(M1 || M2 || ... || Mn)
+/// ```
+/// We have to track both digests, because when we receive the ClientHello we don't
+/// know which digest has been negotiated yet.
+///
+/// So we either have to buffer the ClientHello (hard) or just have two digests (easier)
+#[derive(Debug, Default)]
+pub struct HandshakeTranscript {
+    /// tracks the messages that have been added to the running digest
+    pub hashed_messages: tinyvec::ArrayVec<[HandshakeType; MAX_HANDSHAKE_MESSAGE_COUNT]>,
+    pub sha256_digest: sha2::Sha256,
+    pub sha384_digest: sha2::Sha384,
+}
+
+impl HandshakeTranscript {
+    pub fn add_message(&mut self, message: &HandshakeMessage) {
+        self.hashed_messages.push(message.handshake_type);
+        self.sha256_digest.update(message.raw);
+        self.sha384_digest.update(message.raw);
+    }
+
+    pub fn sha256(&self) -> sha2::digest::Output<sha2::Sha256> {
+        self.sha256_digest.clone().finalize()
+    }
+
+    pub fn sha384(&self) -> sha2::digest::Output<sha2::Sha384> {
+        self.sha384_digest.clone().finalize()
+    }
+}
 
 //    The key derivation process makes use of the HKDF-Extract and
 //    HKDF-Expand functions as defined for HKDF [RFC5869], as well as the
@@ -27,29 +63,28 @@ use sha2::Digest;
 //             HKDF-Expand-Label(Secret, Label,
 //                               Transcript-Hash(Messages), Hash.length)
 // https://www.rfc-editor.org/rfc/rfc8446#section-7.1
-pub fn hkdf_expand_label<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Vec<u8>
+pub fn hkdf_expand_label<H>(secret: &[u8], label: &[u8], context: &[u8], length: u16) -> Output<H>
 where
     SimpleHmac<H>: HmacImpl,
     H: hmac::digest::Digest + hmac::EagerHash,
 {
-    let hkdf_label = {
-        let length = u16::to_be_bytes(length).as_slice().to_vec();
+    let length = u16::to_be_bytes(length);
+    let length = length.as_slice();
 
-        // TODO: make PrefixedBlob zero-copy
-        let label: PrefixedBlob<u8> = PrefixedBlob::new([b"tls13 ", label].concat());
-        let context: PrefixedBlob<u8> = PrefixedBlob::new(context.to_vec());
-        [
-            length,
-            label.encode_to_vec().unwrap(),
-            context.encode_to_vec().unwrap(),
-        ]
-        .concat()
-    };
-
-    let mut output = vec![0; length as usize];
+    let mut output = Output::<H>::default();
 
     let hkdf = GenericHkdf::<SimpleHmac<H>>::from_prk(secret).unwrap();
-    hkdf.expand(&hkdf_label, &mut output).unwrap();
+    hkdf.expand_multi_info(
+        &[
+            length,
+            &[label.len() as u8],
+            label,
+            &[context.len() as u8],
+            context,
+        ],
+        &mut output,
+    )
+    .unwrap();
 
     output
 }
@@ -69,30 +104,18 @@ where
 //    | Handshake | Finished +              | secret_N                    |
 //    |           | CertificateRequest      |                             |
 //    +-----------+-------------------------+-----------------------------+
-struct HandshakeTranscript {
-    messages: Vec<HandshakeMessageValue>,
-}
+// struct HandshakeTranscript {
+//     messages: Vec<HandshakeMessageValue>,
+// }
 
-// 4.4.1.  The Transcript Hash
-//
-//    Many of the cryptographic computations in TLS make use of a
-//    transcript hash.  This value is computed by hashing the concatenation
-//    of each included handshake message, including the handshake message
-//    header carrying the handshake message type and length fields, but not
-//    including record layer headers.  I.e.,
-//
-//     Transcript-Hash(M1, M2, ... Mn) = Hash(M1 || M2 || ... || Mn)
-//
-// NOTE: transcript_hash uses the hash from the negotiated _cipher_, not from the
-// negotiated signature
-pub fn transcript_hash<T: Digest>(messages: &[HandshakeMessageValue]) -> Vec<u8> {
-    let concatenated_messages: Vec<u8> = messages
-        .iter()
-        .flat_map(|message| message.encode_to_vec().unwrap())
-        .collect();
+// pub fn transcript_hash<T: Digest>(messages: &[HandshakeMessageValue]) -> Vec<u8> {
+//     let concatenated_messages: Vec<u8> = messages
+//         .iter()
+//         .flat_map(|message| message.encode_to_vec().unwrap())
+//         .collect();
 
-    T::digest(concatenated_messages).to_vec()
-}
+//     T::digest(concatenated_messages).to_vec()
+// }
 
 // C: EcdsaCurve + CurveArithmetic
 
@@ -175,21 +198,21 @@ pub fn transcript_hash<T: Digest>(messages: &[HandshakeMessageValue]) -> Vec<u8>
 //     // signature
 // }
 
-pub fn certificate(certificate_chain_pem: &[u8]) -> CertificateTls13 {
-    let certs = openssl::x509::X509::stack_from_pem(certificate_chain_pem).unwrap();
-    let certs: Vec<CertificateEntry> = certs
-        .into_iter()
-        .map(|cert| cert.to_der().unwrap())
-        .map(|cert_der| CertificateEntry {
-            cert_data: PrefixedBlob::new(cert_der),
-            extensions: PrefixedBlob::new(Vec::new()),
-        })
-        .collect();
-    CertificateTls13 {
-        certificate_request_context: PrefixedBlob::new(Vec::new()),
-        certificate_list: PrefixedList::new(certs),
-    }
-}
+// pub fn certificate(certificate_chain_pem: &[u8]) -> CertificateTls13 {
+//     let certs = openssl::x509::X509::stack_from_pem(certificate_chain_pem).unwrap();
+//     let certs: Vec<CertificateEntry> = certs
+//         .into_iter()
+//         .map(|cert| cert.to_der().unwrap())
+//         .map(|cert_der| CertificateEntry {
+//             cert_data: PrefixedBlob::new(cert_der),
+//             extensions: PrefixedBlob::new(Vec::new()),
+//         })
+//         .collect();
+//     CertificateTls13 {
+//         certificate_request_context: PrefixedBlob::new(Vec::new()),
+//         certificate_list: PrefixedList::new(certs),
+//     }
+// }
 
 // pub fn finished(
 //     base_key: &[u8],

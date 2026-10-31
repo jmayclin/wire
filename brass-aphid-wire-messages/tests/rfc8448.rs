@@ -64,7 +64,7 @@ fn test_client_hello_1rtt() -> std::io::Result<()> {
 
     // Check cipher suites
     assert_eq!(
-        client_hello.offered_ciphers.list(),
+        client_hello.offered_ciphers.iter().collect::<Vec<_>>(),
         &[
             iana::constants::TLS_AES_128_GCM_SHA256,
             iana::constants::TLS_CHACHA20_POLY1305_SHA256,
@@ -83,9 +83,9 @@ fn test_client_hello_1rtt() -> std::io::Result<()> {
         .map(|ext| ServerNameClientHello::decode_from_exact(ext.extension_data.blob()).unwrap())
         .unwrap();
 
-    assert_eq!(sni.server_name_list.list().len(), 1);
+    assert_eq!(sni.server_name_list.iter().count(), 1);
     assert_eq!(
-        String::from_utf8_lossy(sni.server_name_list.list()[0].host_name.blob()),
+        String::from_utf8_lossy(sni.server_name_list.iter().next().unwrap().host_name.blob()),
         "server"
     );
     Ok(())
@@ -135,12 +135,13 @@ fn test_server_hello_1rtt() {
     );
 
     // Check extensions
-    assert_eq!(server_hello.extensions.list().len(), 2);
+    assert_eq!(server_hello.extensions.iter().count(), 2);
 
     // Find and check the key share extension
     server_hello
         .extensions
-        .list()
+        .iter()
+        .collect::<Vec<_>>()
         .iter()
         .find(|ext| ext.extension_type == ExtensionType::KeyShare)
         .unwrap();
@@ -148,7 +149,8 @@ fn test_server_hello_1rtt() {
     // Find and check the supported versions extension
     let supported_versions = server_hello
         .extensions
-        .list()
+        .iter()
+        .collect::<Vec<_>>()
         .iter()
         .find(|ext| ext.extension_type == ExtensionType::SupportedVersions)
         .map(|ext| {
@@ -184,7 +186,7 @@ fn test_encrypted_extensions_1rtt() {
     let (encrypted_extensions, _) = EncryptedExtensions::decode_from(remaining).unwrap();
 
     // Verify the extensions blob is present
-    assert!(!encrypted_extensions.extensions.list().is_empty());
+    assert!(!encrypted_extensions.extensions.iter().next().is_none());
 }
 
 /// Test the Certificate message from the Simple 1-RTT Handshake in RFC8448
@@ -237,10 +239,14 @@ fn test_certificate_1rtt() {
     assert_eq!(certificate.certificate_request_context.blob().len(), 0);
 
     // Verify the certificate list has one entry
-    assert_eq!(certificate.certificate_list.list().len(), 1);
+    assert_eq!(certificate.certificate_list.iter().count(), 1);
 
     // Verify the certificate data is present
-    assert!(!certificate.certificate_list.list()[0]
+    assert!(!certificate
+        .certificate_list
+        .iter()
+        .next()
+        .unwrap()
         .cert_data
         .blob()
         .is_empty());
@@ -342,7 +348,7 @@ fn test_client_hello_0rtt() -> std::io::Result<()> {
 
     // Check cipher suites
     assert_eq!(
-        client_hello.offered_ciphers.list(),
+        client_hello.offered_ciphers.iter().collect::<Vec<_>>(),
         &[
             iana::constants::TLS_AES_128_GCM_SHA256,
             iana::constants::TLS_CHACHA20_POLY1305_SHA256,
@@ -421,7 +427,7 @@ fn test_client_hello_hello_retry_request() -> std::io::Result<()> {
 
     // Check cipher suites
     assert_eq!(
-        client_hello.offered_ciphers.list(),
+        client_hello.offered_ciphers.iter().collect::<Vec<_>>(),
         &[
             iana::constants::TLS_AES_128_GCM_SHA256,
             iana::constants::TLS_CHACHA20_POLY1305_SHA256,
@@ -438,7 +444,7 @@ fn test_client_hello_hello_retry_request() -> std::io::Result<()> {
         .unwrap();
 
     // Verify key share contains x25519 key
-    assert_eq!(key_share.client_shares.list().len(), 1);
+    assert_eq!(key_share.client_shares.iter().count(), 1);
     Ok(())
 }
 
@@ -477,7 +483,8 @@ fn test_hello_retry_request() {
     // Check for supported_versions extension
     let supported_versions = server_hello
         .extensions
-        .list()
+        .iter()
+        .collect::<Vec<_>>()
         .iter()
         .find(|ext| ext.extension_type == ExtensionType::SupportedVersions)
         .map(|ext| {
@@ -490,7 +497,8 @@ fn test_hello_retry_request() {
     // Check for key_share extension with selected group
     let has_key_share = server_hello
         .extensions
-        .list()
+        .iter()
+        .collect::<Vec<_>>()
         .iter()
         .any(|ext| ext.extension_type == ExtensionType::KeyShare);
 
